@@ -3,7 +3,7 @@ package chord
 import (
 	"crypto/sha1"
 	"fmt"
-	"github.com/arriqaaq/chord/models"
+	"github.com/chord/models"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"hash"
@@ -51,6 +51,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+//将id转化为byte数组形式
 func NewInode(id string, addr string) *models.Node {
 	h := sha1.New()
 	if _, err := h.Write([]byte(id)); err != nil {
@@ -167,10 +168,10 @@ type Node struct {
 
 	cnf *Config
 
-	predecessor *models.Node
-	predMtx     sync.RWMutex
+	predecessor *models.Node //直接前驱
+	predMtx     sync.RWMutex //为predecessor加锁
 
-	successor *models.Node
+	successor *models.Node //直接后继
 	succMtx   sync.RWMutex
 
 	shutdownCh chan struct{}
@@ -187,6 +188,7 @@ type Node struct {
 	lastStablized time.Time
 }
 
+//将key映射为Hash值
 func (n *Node) hashKey(key string) ([]byte, error) {
 	h := n.cnf.Hash()
 	if _, err := h.Write([]byte(key)); err != nil {
@@ -196,6 +198,7 @@ func (n *Node) hashKey(key string) ([]byte, error) {
 	return val, nil
 }
 
+//将节点加入Hash环
 func (n *Node) join(joinNode *models.Node) error {
 	// First check if node already present in the circle
 	// Join this node to the same chord ring as parent
@@ -214,7 +217,7 @@ func (n *Node) join(joinNode *models.Node) error {
 	} else {
 		foo = n.Node
 	}
-
+	//succ为n的直接前驱，通过findSuccessorRPC(node *models.Node, id []byte)查找
 	succ, err := n.findSuccessorRPC(foo, n.Id)
 	if err != nil {
 		return err
@@ -367,17 +370,18 @@ func (n *Node) findSuccessor(id []byte) (*models.Node, error) {
 	}
 
 	var err error
-
+	//判断id是否在区间(n,successor],对应原论文的find_successor
 	if betweenRightIncl(id, curr.Id, succ.Id) {
 		return succ, nil
 	} else {
+		//不在的话找表中最近的前继节点
 		pred := n.closestPrecedingNode(id)
 		/*
 			NOT SURE ABOUT THIS, RECHECK from paper!!!
 			if preceeding node and current node are the same,
 			store the key on this node
 		*/
-
+		//如果前继节点的id与当前节点的id相等，则将key存储在当前节点
 		if isEqual(pred.Id, n.Id) {
 			succ, err = n.getSuccessorRPC(pred)
 			if err != nil {

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/arriqaaq/chord"
-	"github.com/arriqaaq/chord/models"
+	"github.com/chord"
+	"github.com/chord/models"
 	"log"
 	"math/big"
 	"os"
@@ -39,5 +39,4 @@ func main() {
 	<-time.After(10 * time.Second)
 	<-c
 	h.Stop()
-
 }

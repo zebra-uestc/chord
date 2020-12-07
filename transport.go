@@ -3,7 +3,7 @@ package chord
 import (
 	"errors"
 	"fmt"
-	"github.com/arriqaaq/chord/models"
+	"github.com/chord/models"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net"
