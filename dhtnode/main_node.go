@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 
 	"github.com/golang/protobuf/proto"
-
 	"github.com/zebra-uestc/chord"
+	"github.com/zebra-uestc/chord/dhtnode/blockutils"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 )
 
@@ -36,58 +37,29 @@ type mainNode struct {
 	sendBlockChan chan *bm.Block
 	bm.UnimplementedBlockTranserServer
 	bm.UnimplementedMsgTranserServer
-	lastBlock *bm.Block
+	//lastBlockCnf *bm.Config
+	lastBlockMtx   sync.RWMutex
+	blockNumMtx   sync.RWMutex
+	lastBlockHash []byte
+	blockNum      uint64
 }
 
 func NewMainNode() (MainNode, error) {
-	//向orderer询问lastBlock
-	// conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-	// if err != nil {
-	// 	log.Fatalf("did not connect: %v", err)
-	// }
-	// c := bm.NewBlockTranserClient(conn)
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	// defer cancel()
-	// r, err := c.LoadConfig(ctx, nil)
-	// mainNode.lastBlock = r
-	// if err != nil {
-	// 	log.Fatalf("could not transcation Block: %v", err)
-	// }
 
-	//给prevBlock编号
-	// go func() {
-	// 	ticker := time.NewTicker(1 * time.Second)
-	// 	for {
-	// 		select {
-	// 		case prevBlock := <-mainNode.prevBlockChan:
-	// 			mainNode.sendBlockChan <- mainNode.FinalBlock(mainNode.lastBlock, prevBlock)
-
-	// 		case <-mainNode.GetShutdownCh():
-	// 			ticker.Stop()
-	// 		}
-	// 	}
-	// }()
-
-	// //给orderer发Block
-	// go func() {
-	// 	ticker := time.NewTicker(1 * time.Second)
-	// 	for {
-	// 		select {
-	// 		case finalBlock := <-mainNode.sendBlockChan:
-	// 			conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-	// 			if err != nil {
-	// 				log.Fatalf("did not connect: %v", err)
-	// 			}
-	// 			c := bm.NewBlockTranserClient(conn)
-	// 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	// 			defer cancel()
-	// 			_, err = c.TransBlock(ctx, &bm.Block{Header: finalBlock.Header, Data: finalBlock.Data, Metadata: finalBlock.Metadata /*参数v*/})
-
-	// 		case <-mainNode.GetShutdownCh():
-	// 			ticker.Stop()
-	// 		}
-	// 	}
-	// }()
+	//TODO:暂时只定义了接口LoadConfig，还未实现其内容，无法容忍mainnode宕机
+	////向orderer询问lastBlock
+	//conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+	//if err != nil {
+	//	log.Fatalf("did not connect: %v", err)
+	//}
+	//c := bm.NewBlockTranserClient(conn)
+	//ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	//defer cancel()
+	//r, err := c.LoadConfig(ctx, nil)
+	//mainNode.lastBlockCnf = r
+	//if err != nil {
+	//	log.Fatalf("could not transcation Block: %v", err)
+	//}
 
 	return &mainNode{}, nil
 }
@@ -137,13 +109,52 @@ func (mn *mainNode) startTransBlockServer(address string) {
 	if err := s.Serve(lis); err != nil {
 		log.Fatal("fail to  serve:", err)
 	}
+
+	//给orderer发Block
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+
+		for {
+			select {
+			//给区块编号
+			case prevBlock := <-mn.prevBlockChan:
+				newBlock := mn.FinalBlock(prevBlock)
+				//将新生成的块放到sendBlockChan转发给orderer
+				mn.sendBlockChan <- newBlock
+				//更新最后一个区块的哈希
+				mn.lastBlockMtx.RLock()
+				mn.lastBlockHash = blockutils.BlockHeaderHash(newBlock.Header)
+				mn.lastBlockMtx.Unlock()
+				//更新区块个数
+				mn.blockNumMtx.RLock()
+				mn.blockNum++
+				mn.blockNumMtx.Unlock()
+
+			case finalBlock := <-mn.sendBlockChan:
+				conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+				if err != nil {
+					log.Fatalf("did not connect: %v", err)
+				}
+				c := bm.NewBlockTranserClient(conn)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				_, err = c.TransBlock(ctx, &bm.Block{Header: finalBlock.Header, Data: finalBlock.Data, Metadata: finalBlock.Metadata /*参数v*/})
+
+			case <-mn.GetShutdownCh():
+				ticker.Stop()
+			}
+		}
+	}()
+
 	println("TransBlockServer serve end")
 }
 
+//启动TransBlockServer，接收其他节点传来的prevBlock
 func (mn *mainNode) StartTransBlockServer(address string) {
 	go mn.startTransBlockServer(address)
 }
 
+//将收到的prevBlock的放入本地的prevBlockChan中
 func (mn *mainNode) SendPrevBlockToChan(block *bm.Block) {
 	mn.prevBlockChan <- block
 }
@@ -176,18 +187,20 @@ func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, e
 
 //接收其他节点的block
 func (mainNode *mainNode) TransBlock(ctx context.Context, block *bm.Block) (*bm.DhtStatus, error) {
-	mainNode.prevBlockChan <- block
+
+	finalBlock := mainNode.FinalBlock(block)
+	mainNode.prevBlockChan <- finalBlock
 	return nil, nil
 }
 
 //给区块编号
-func (mainNode *mainNode) FinalBlock(lastBlock *bm.Block, block *bm.Block) *bm.Block {
-	block.Header.PreviousHash = lastBlock.Header.PreviousHash
-	block.Header.Number = lastBlock.Header.Number + 1
+func (mainNode *mainNode) FinalBlock(block *bm.Block) *bm.Block {
+	block.Header.PreviousHash = mainNode.lastBlockHash
+	block.Header.Number = mainNode.blockNum
 	return block
 }
 
-func (mainNode *mainNode) hashValue(key []byte) ([]byte, error) {
+func (mn *mainNode) hashValue(key []byte) ([]byte, error) {
 	h := sha256.New()
 	if _, err := h.Write(key); err != nil {
 		return nil, err
@@ -196,6 +209,6 @@ func (mainNode *mainNode) hashValue(key []byte) ([]byte, error) {
 	return hashVal, nil
 }
 
-func (mainNode *mainNode) Stop() {
-	close(mainNode.GetShutdownCh())
+func (mn *mainNode) Stop() {
+	close(mn.GetShutdownCh())
 }
