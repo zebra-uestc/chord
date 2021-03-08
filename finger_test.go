@@ -3,22 +3,29 @@ package chord
 import (
 	"crypto/sha1"
 	"fmt"
-	"github.com/arriqaaq/chord/models"
 	"math/big"
 	"reflect"
 	"testing"
+
+	cm "github.com/zebra-uestc/chord/models/chord"
 )
 
 func TestNewFingerTable(t *testing.T) {
+	//newFingerTable(node *cm.Node, m int)中的node.Id是一个byte数组,m为偏移量
+	//NewInode(id string, addr string)将id转换为size为20位的byte数组
+	//sha1.New().Size()=20
+	//对于newFingerTable来说，返回的每个fingerEntry由fingerId和Node二元组组成
+	//Node为输入的node
+	//fingerId为起始id转换为byte数组后的id再加上offset
 	g := newFingerTable(NewInode("8", "0.0.0.0:8003"), sha1.New().Size())
 	for i, j := range g {
-		fmt.Printf("%d, %x, %x\n", i, j.Id, j.Node.Id)
+		fmt.Printf("%d, %x, %x\n", i, j.Id, j.RemoteNode.Id)
 	}
 }
 
 func TestNewFingerEntry(t *testing.T) {
 	hashSize := sha1.New().Size() * 8
-	id := GetHashID("0.0.0.0:8083")
+	id := GetHashID([]byte("0.0.0.0:8083"))
 	xInt := (&big.Int{}).SetBytes(id)
 	for i := 0; i < 100; i++ {
 		nextHash := fingerID(id, i, hashSize)
@@ -30,7 +37,7 @@ func TestNewFingerEntry(t *testing.T) {
 
 func Test_newFingerTable(t *testing.T) {
 	type args struct {
-		node *models.Node
+		node *cm.Node
 		m    int
 	}
 	tests := []struct {
@@ -53,7 +60,7 @@ func Test_newFingerTable(t *testing.T) {
 func Test_newFingerEntry(t *testing.T) {
 	type args struct {
 		id   []byte
-		node *models.Node
+		node *cm.Node
 	}
 	tests := []struct {
 		name string
