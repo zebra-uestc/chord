@@ -149,7 +149,7 @@ var BlockTranser_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MsgTranserClient interface {
 	//由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-	TransMsg(ctx context.Context, in *Msg, opts ...grpc.CallOption) (*DhtStatus, error)
+	TransMsg(ctx context.Context, in *MsgBytes, opts ...grpc.CallOption) (*DhtStatus, error)
 }
 
 type msgTranserClient struct {
@@ -160,7 +160,7 @@ func NewMsgTranserClient(cc grpc.ClientConnInterface) MsgTranserClient {
 	return &msgTranserClient{cc}
 }
 
-func (c *msgTranserClient) TransMsg(ctx context.Context, in *Msg, opts ...grpc.CallOption) (*DhtStatus, error) {
+func (c *msgTranserClient) TransMsg(ctx context.Context, in *MsgBytes, opts ...grpc.CallOption) (*DhtStatus, error) {
 	out := new(DhtStatus)
 	err := c.cc.Invoke(ctx, "/bridge.MsgTranser/TransMsg", in, out, opts...)
 	if err != nil {
@@ -174,7 +174,7 @@ func (c *msgTranserClient) TransMsg(ctx context.Context, in *Msg, opts ...grpc.C
 // for forward compatibility
 type MsgTranserServer interface {
 	//由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-	TransMsg(context.Context, *Msg) (*DhtStatus, error)
+	TransMsg(context.Context, *MsgBytes) (*DhtStatus, error)
 	mustEmbedUnimplementedMsgTranserServer()
 }
 
@@ -182,7 +182,7 @@ type MsgTranserServer interface {
 type UnimplementedMsgTranserServer struct {
 }
 
-func (UnimplementedMsgTranserServer) TransMsg(context.Context, *Msg) (*DhtStatus, error) {
+func (UnimplementedMsgTranserServer) TransMsg(context.Context, *MsgBytes) (*DhtStatus, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransMsg not implemented")
 }
 func (UnimplementedMsgTranserServer) mustEmbedUnimplementedMsgTranserServer() {}
@@ -199,7 +199,7 @@ func RegisterMsgTranserServer(s grpc.ServiceRegistrar, srv MsgTranserServer) {
 }
 
 func _MsgTranser_TransMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Msg)
+	in := new(MsgBytes)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func _MsgTranser_TransMsg_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/bridge.MsgTranser/TransMsg",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgTranserServer).TransMsg(ctx, req.(*Msg))
+		return srv.(MsgTranserServer).TransMsg(ctx, req.(*MsgBytes))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-
+	"github.com/hyperledger/fabric/protoutil"
 	"github.com/golang/protobuf/proto"
 	"github.com/zebra-uestc/chord"
 	bm "github.com/zebra-uestc/chord/models/bridge"
+	cb "github.com/hyperledger/fabric-protos-go/common"
 )
 
 var (
@@ -31,8 +32,8 @@ type server struct{}
 
 type mainNode struct {
 	*dhtNode
-	prevBlockChan chan *bm.Block
-	sendBlockChan chan *bm.Block
+	prevBlockChan chan *cb.Block
+	sendBlockChan chan *cb.Block
 	bm.UnimplementedBlockTranserServer
 	bm.UnimplementedMsgTranserServer
 	//lastBlockCnf *bm.Config
@@ -63,7 +64,7 @@ func NewMainNode() (MainNode, error) {
 }
 
 type mainNodeInside interface {
-	SendPrevBlockToChan(*bm.Block)
+	SendPrevBlockToChan(*cb.Block)
 }
 
 func (mn *mainNode) StartDht(id, address string) {
@@ -120,7 +121,7 @@ func (mn *mainNode) startTransBlockServer(address string) {
 				//将新生成的块放到sendBlockChan转发给orderer
 				mn.sendBlockChan <- newBlock
 				//更新最后一个区块的哈希和区块个数
-				mn.lastBlockHash = BlockHeaderHash(newBlock.Header)
+				mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
 				mn.blockNum++
 
 			case finalBlock := <-mn.sendBlockChan:
@@ -150,7 +151,7 @@ func (mn *mainNode) StartTransBlockServer(address string) {
 	go mn.startTransBlockServer(address)
 }
 
-func (mn *mainNode) SendPrevBlockToChan(block *bm.Block) {
+func (mn *mainNode) SendPrevBlockToChan(block *cb.Block) {
 	mn.prevBlockChan <- block
 }
 
@@ -171,7 +172,7 @@ type message struct {
 }
 
 // order To dht的处理
-func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, error) {
+func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
 
 	println("get msg")
 	value, err := proto.Marshal(msg)
@@ -179,6 +180,7 @@ func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, e
 	if err != nil {
 		log.Println("Marshal err: ", err)
 	}
+	//将value加密为hashKey
 	hashKey, err := mn.hashValue(value)
 	if err != nil {
 		log.Println("hashVal err: ", err)
@@ -191,7 +193,11 @@ func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, e
 //接收其他节点的block
 func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
 	//反序列化为Block
-	var block *bm.Block
+	// block := &cb.Block{}
+	block,err := protoutil.UnmarshalBlock(blockByte.BlockPayload); 
+	if err != nil {
+		return nil, err
+	} 
 	proto.Unmarshal(blockByte.BlockPayload, block)
 	finalBlock := mainNode.FinalBlock(block)
 	mainNode.prevBlockChan <- finalBlock
@@ -199,7 +205,7 @@ func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockByt
 }
 
 //给区块编号
-func (mainNode *mainNode) FinalBlock(block *bm.Block) *bm.Block {
+func (mainNode *mainNode) FinalBlock(block *cb.Block) *cb.Block {
 	block.Header.PreviousHash = mainNode.lastBlockHash
 	block.Header.Number = mainNode.blockNum
 	return block

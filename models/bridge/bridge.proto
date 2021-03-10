@@ -4,8 +4,6 @@ package bridge;
 
 option go_package = "github.com/hyperledger/chord/dhtnode/bridge";
 
-import "common.proto";
-
 // node0(Server) <-> orderer(Client)
 service BlockTranser{
     // 由mainNode调用，将生成好的Block发送到orderer
@@ -18,7 +16,7 @@ service BlockTranser{
 
 service MsgTranser{
     //由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-    rpc TransMsg(Msg) returns (DhtStatus){};
+    rpc TransMsg(MsgBytes) returns (DhtStatus){};
 }
 
 message DhtStatus{
@@ -31,7 +29,7 @@ message Config{
 }
 
 
-message Msg{
+message MsgBytes{
     uint64 configSeq=1;
 	bytes normalMsg=2;
     bytes configMsg=3;

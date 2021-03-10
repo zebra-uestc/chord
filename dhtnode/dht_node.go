@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 	"github.com/golang/protobuf/proto"
+
 	"github.com/zebra-uestc/chord"
+	cb "github.com/hyperledger/fabric-protos-go/common"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	cm "github.com/zebra-uestc/chord/models/chord"
 	"google.golang.org/grpc"
@@ -19,7 +21,7 @@ var (
 
 type dhtNode struct {
 	exitChan              chan struct{}
-	pendingBatch          []*bm.Envelope
+	pendingBatch          []*cb.Envelope
 	pendingBatchSizeBytes uint32
 	PendingBatchStartTime time.Time
 	mainNodeAddress       string
@@ -30,7 +32,7 @@ type dhtNode struct {
 	Metrics   *Metrics
 }
 
-func (dhtn *dhtNode) DhtInsideTransBlock(block *bm.Block) error {
+func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	if dhtn.Addr != dhtn.mainNodeAddress {
 		conn, err := grpc.Dial(dhtn.mainNodeAddress, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
@@ -111,13 +113,13 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 					batch := dhtnode.Cut()
 					if batch != nil {
 						block := dhtnode.PreCreateNextBlock(batch)
-						err := dhtnode.DhtInsideTransBlock(&bm.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
+						err := dhtnode.DhtInsideTransBlock(&cb.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
 						if err != nil {
 							log.Fatalf("could not transcation Block: %v", err)
 						}
 					}
-					block := dhtnode.PreCreateNextBlock([]*bm.Envelope{msg.ConfigMsg})
-					err := dhtnode.DhtInsideTransBlock(&bm.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
+					block := dhtnode.PreCreateNextBlock([]*cb.Envelope{msg.ConfigMsg})
+					err := dhtnode.DhtInsideTransBlock(&cb.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
 					if err != nil {
 						log.Fatalf("could not transcation Block: %v", err)
 					}
@@ -133,7 +135,7 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 				}
 				logger.Debugf("Batch timer expired, creating block")
 				block := dhtnode.PreCreateNextBlock(batch)
-				err := dhtnode.DhtInsideTransBlock(&bm.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
+				err := dhtnode.DhtInsideTransBlock(&cb.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
 				if err != nil {
 					log.Fatalf("could not transcation Block: %v", err)
 				}
