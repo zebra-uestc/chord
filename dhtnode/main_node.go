@@ -5,14 +5,12 @@ import (
 	"crypto/sha256"
 	"log"
 	"net"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/zebra-uestc/chord"
-	"github.com/zebra-uestc/chord/dhtnode/blockutils"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 )
 
@@ -38,11 +36,11 @@ type mainNode struct {
 	bm.UnimplementedBlockTranserServer
 	bm.UnimplementedMsgTranserServer
 	//lastBlockCnf *bm.Config
-	lastBlockMtx   sync.RWMutex
-	blockNumMtx   sync.RWMutex
 	lastBlockHash []byte
 	blockNum      uint64
 }
+
+
 
 func NewMainNode() (MainNode, error) {
 
@@ -121,14 +119,9 @@ func (mn *mainNode) startTransBlockServer(address string) {
 				newBlock := mn.FinalBlock(prevBlock)
 				//将新生成的块放到sendBlockChan转发给orderer
 				mn.sendBlockChan <- newBlock
-				//更新最后一个区块的哈希
-				mn.lastBlockMtx.RLock()
-				mn.lastBlockHash = blockutils.BlockHeaderHash(newBlock.Header)
-				mn.lastBlockMtx.Unlock()
-				//更新区块个数
-				mn.blockNumMtx.RLock()
+				//更新最后一个区块的哈希和区块个数
+				mn.lastBlockHash = BlockHeaderHash(newBlock.Header)
 				mn.blockNum++
-				mn.blockNumMtx.Unlock()
 
 			case finalBlock := <-mn.sendBlockChan:
 				conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
@@ -138,7 +131,11 @@ func (mn *mainNode) startTransBlockServer(address string) {
 				c := bm.NewBlockTranserClient(conn)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 				defer cancel()
-				_, err = c.TransBlock(ctx, &bm.Block{Header: finalBlock.Header, Data: finalBlock.Data, Metadata: finalBlock.Metadata /*参数v*/})
+				finalBlockByte,err :=proto.Marshal(finalBlock)
+				if err != nil {
+					log.Fatalf("marshal err")
+				}
+				_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload:finalBlockByte})
 
 			case <-mn.GetShutdownCh():
 				ticker.Stop()
@@ -149,12 +146,10 @@ func (mn *mainNode) startTransBlockServer(address string) {
 	println("TransBlockServer serve end")
 }
 
-//启动TransBlockServer，接收其他节点传来的prevBlock
 func (mn *mainNode) StartTransBlockServer(address string) {
 	go mn.startTransBlockServer(address)
 }
 
-//将收到的prevBlock的放入本地的prevBlockChan中
 func (mn *mainNode) SendPrevBlockToChan(block *bm.Block) {
 	mn.prevBlockChan <- block
 }
@@ -169,25 +164,35 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
+type message struct {
+	configSeq uint64
+	normalMsg *bm.Envelope
+	configMsg *bm.Envelope
+}
+
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, error) {
+
 	println("get msg")
-	key, err := proto.Marshal(msg)
+	value, err := proto.Marshal(msg)
+
 	if err != nil {
 		log.Println("Marshal err: ", err)
 	}
-	hashVal, err := mn.hashValue(key)
+	hashKey, err := mn.hashValue(value)
 	if err != nil {
 		log.Println("hashVal err: ", err)
 	}
 	// //通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-	err = mn.Set(key, hashVal)
+	err = mn.Set(hashKey, value)
 	return nil, err
 }
 
 //接收其他节点的block
-func (mainNode *mainNode) TransBlock(ctx context.Context, block *bm.Block) (*bm.DhtStatus, error) {
-
+func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
+	//反序列化为Block
+	var block *bm.Block
+	proto.Unmarshal(blockByte.BlockPayload, block)
 	finalBlock := mainNode.FinalBlock(block)
 	mainNode.prevBlockChan <- finalBlock
 	return nil, nil
