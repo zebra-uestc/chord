@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log"
 	"time"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/zebra-uestc/chord"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	cm "github.com/zebra-uestc/chord/models/chord"
@@ -14,7 +14,7 @@ import (
 
 var (
 	emptyPrevHash = []byte{}
-	//TODO:传入主节点的addr,传入configtx.yaml文件中的batchTimeout
+	toMainNodeAddr = "127.0.0.1:8002"
 )
 
 type dhtNode struct {
@@ -39,7 +39,12 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *bm.Block) error {
 		c := bm.NewBlockTranserClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_, err = c.TransBlock(ctx, &bm.Block{Header: block.Header, Data: block.Data, Metadata: block.Metadata /*参数v*/})
+
+		finalBlockByte,err :=proto.Marshal(block)
+		if err != nil {
+			log.Fatalf("marshal err")
+		}
+		_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload:finalBlockByte})
 		if err != nil {
 			log.Fatalf("could not transcation Block: %v", err)
 		}
@@ -55,10 +60,6 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *bm.Block) error {
 func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 	node, err := chord.NewNode(cnf, joinNode)
 	dhtnode := &dhtNode{Node: node}
-	if joinNode != nil {
-		//记录主节点地址
-		dhtnode.mainNodeAddress = joinNode.Addr
-	}
 
 	//加载默认配置
 	dhtnode.dhtConfig = dhtnode.DefaultDhtConfig()

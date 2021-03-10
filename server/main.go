@@ -21,8 +21,11 @@ var addresses = []string{
 
 func main() {
 	mainNode, err := dhtnode.NewMainNode()
+	//mainnode节点启动的地址为8001
 	mainNode.StartDht("0", addresses[0])
+	//mainNode接收来自其他DHT节点的block的地址8002
 	mainNode.StartTransBlockServer(addresses[1])
+	//mainNode接受来自orderer的Msg的地址8003
 	mainNode.StartTransMsgServer(addresses[2])
 
 	if err != nil {

@@ -6,7 +6,7 @@ syntax = "proto3";
 
 package bridge;
 
-option go_package = "github.com/zebra-uestc/chord/dhtnode/bridge";
+option go_package = "github.com/hyperledger/chord/dhtnode/bridge";
 
 import "google/protobuf/timestamp.proto";
 

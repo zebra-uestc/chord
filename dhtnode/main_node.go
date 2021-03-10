@@ -40,6 +40,8 @@ type mainNode struct {
 	blockNum      uint64
 }
 
+
+
 func NewMainNode() (MainNode, error) {
 
 	//TODO:暂时只定义了接口LoadConfig，还未实现其内容，无法容忍mainnode宕机
@@ -129,7 +131,11 @@ func (mn *mainNode) startTransBlockServer(address string) {
 				c := bm.NewBlockTranserClient(conn)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 				defer cancel()
-				_, err = c.TransBlock(ctx, &bm.Block{Header: finalBlock.Header, Data: finalBlock.Data, Metadata: finalBlock.Metadata /*参数v*/})
+				finalBlockByte,err :=proto.Marshal(finalBlock)
+				if err != nil {
+					log.Fatalf("marshal err")
+				}
+				_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload:finalBlockByte})
 
 			case <-mn.GetShutdownCh():
 				ticker.Stop()
@@ -158,25 +164,35 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
+type message struct {
+	configSeq uint64
+	normalMsg *bm.Envelope
+	configMsg *bm.Envelope
+}
+
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.Msg) (*bm.DhtStatus, error) {
+
 	println("get msg")
-	key, err := proto.Marshal(msg)
+	value, err := proto.Marshal(msg)
+
 	if err != nil {
 		log.Println("Marshal err: ", err)
 	}
-	hashVal, err := mn.hashValue(key)
+	hashKey, err := mn.hashValue(value)
 	if err != nil {
 		log.Println("hashVal err: ", err)
 	}
 	// //通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-	err = mn.Set(key, hashVal)
+	err = mn.Set(hashKey, value)
 	return nil, err
 }
 
 //接收其他节点的block
-func (mainNode *mainNode) TransBlock(ctx context.Context, block *bm.Block) (*bm.DhtStatus, error) {
-
+func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
+	//反序列化为Block
+	var block *bm.Block
+	proto.Unmarshal(blockByte.BlockPayload, block)
 	finalBlock := mainNode.FinalBlock(block)
 	mainNode.prevBlockChan <- finalBlock
 	return nil, nil
