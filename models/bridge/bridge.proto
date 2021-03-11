@@ -4,19 +4,21 @@ package bridge;
 
 option go_package = "github.com/hyperledger/chord/dhtnode/bridge";
 
-// node0(Server) <-> orderer(Client)
-service BlockTranser{
-    // 由mainNode调用，将生成好的Block发送到orderer
-    //当dht内部节点传块时，mainNode实现，将收到的Block放到本地的prevBlockChan中
-    // 由orderer实现，将收到的Block放到本地的receiveChan中
-    rpc TransBlock(BlockBytes) returns (DhtStatus){};
-    //由orderer实现，暂时还未实现
-    rpc LoadConfig(DhtStatus) returns (Config){};
+// orderer  (Client) <-> main_node(Server)
+service MsgTranser{
+    //orderer（调用）将自己收到的Msg发送给mainNode（实现），mainnode通过Chord算法的Set操作转发给其他节点
+    rpc TransMsg(MsgBytes) returns (DhtStatus){};
 }
 
-service MsgTranser{
-    //由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-    rpc TransMsg(MsgBytes) returns (DhtStatus){};
+// dht_node (Client) <-> main_node(Server)
+// main_node(Client) <-> orderer(Server)
+service BlockTranser{
+    // dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
+    // mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
+    rpc TransBlock(BlockBytes) returns (DhtStatus){};
+    // main_node无须实现此函数
+    // main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
+    rpc LoadConfig(DhtStatus) returns (Config){};
 }
 
 message DhtStatus{
@@ -27,7 +29,6 @@ message Config{
    bytes prevBlockHash = 1;
    uint64 lastBlockNum = 2;
 }
-
 
 message MsgBytes{
     uint64 configSeq=1;

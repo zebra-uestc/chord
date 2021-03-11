@@ -17,9 +17,9 @@ import (
 )
 
 var (
-	eMptyRequest       = &bm.DhtStatus{}
-	OrdererAddress     = ":6666"
-	GenesisesBlockHash = []byte{0x09, 0xdd, 0xec, 0x54, 0x73, 0xcd, 0xaa, 0x05, 0x39, 0xe8, 0x37, 0x75, 0x48, 0x32, 0x35, 0x6d, 0x13, 0x34, 0xf1, 0xde, 0x89, 0x26, 0x18, 0xaa, 0x42, 0x2b, 0x9b, 0x5b, 0xfb, 0xd0, 0x0f, 0x77}
+	eMptyRequest   = &bm.DhtStatus{}
+	OrdererAddress = "127.0.0.1:6666"
+	// GenesisesBlockHash = []byte{0x09,0xdd,0xec,0x54,0x73,0xcd,0xaa,0x05,0x39,0xe8,0x37,0x75,0x48,0x32,0x35,0x6d,0x13,0x34,0xf1,0xde,0x89,0x26,0x18,0xaa,0x42,0x2b,0x9b,0x5b,0xfb,0xd0,0x0f,0x77} 
 )
 
 type MainNode interface {
@@ -43,28 +43,30 @@ type mainNode struct {
 	blockNum      uint64
 }
 
-func NewMainNode() (MainNode, error) {
 
-	//TODO:暂时只定义了接口LoadConfig，还未实现其内容，无法容忍mainnode宕机
-	////向orderer询问lastBlock
-	//conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-	//if err != nil {
-	//	log.Fatalf("did not connect: %v", err)
-	//}
-	//c := bm.NewBlockTranserClient(conn)
-	//ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	//defer cancel()
-	//r, err := c.LoadConfig(ctx, nil)
-	//mainNode.lastBlockCnf = r
-	//if err != nil {
-	//	log.Fatalf("could not transcation Block: %v", err)
-	//}
+// NewMainNode 创建mainNode节点
+// 其中会向Orderer询问配置，如果无法通信，则等待1分钟
+func NewMainNode() (MainNode, error) {
+	//向orderer询问lastBlock
+	log.Println("Loading Config...")
+	conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	c := bm.NewBlockTranserClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cnf, err := c.LoadConfig(ctx, &bm.DhtStatus{})
+	if err != nil {
+		log.Fatalf("could not transcation Block: %v", err)
+	}
 
 	return &mainNode{
 		prevBlockChan: make(chan *cb.Block, 10),
-		sendBlockChan: make(chan *cb.Block, 10),
-		blockNum:      1,
-	}, nil
+		sendBlockChan: make(chan *cb.Block, 1),
+		blockNum: cnf.LastBlockNum,
+		lastBlockHash: cnf.PrevBlockHash,
+		}, nil
 }
 
 type mainNodeInside interface {
@@ -208,9 +210,6 @@ func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockByt
 //给区块编号
 func (mainNode *mainNode) FinalBlock(block *cb.Block) *cb.Block {
 	block.Header.PreviousHash = mainNode.lastBlockHash
-	if mainNode.blockNum == 1 {
-		block.Header.PreviousHash = GenesisesBlockHash
-	}
 	block.Header.Number = mainNode.blockNum
 	return block
 }
