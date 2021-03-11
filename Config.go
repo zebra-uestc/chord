@@ -20,4 +20,5 @@ const MAINNODEADDRESSLOCAL string = "127.0.0.1:8001"
 // the mainNode's address for transmit PrevBlock
 const MAINNODEADDRESSMSG string = "127.0.0.1:8002"
 
+// the time for cutting a batch if there are not enough Msg
 const BATCHTIMEOUT time.Duration = 2 * time.Second
