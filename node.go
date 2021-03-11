@@ -25,7 +25,8 @@ func DefaultConfig() *Config {
 
 	n.DialOpts = append(n.DialOpts,
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
+		//修改超时时间
+		grpc.WithTimeout(1*time.Hour),
 		grpc.FailOnNonTempDialError(true),
 		grpc.WithInsecure(),
 	)
@@ -563,6 +564,7 @@ func (n *Node) stabilize() {
 		return
 	}
 	//x.Id在（n.Id, succ.Id）之间
+	//TODO:需要实现between
 	if x.Id != nil && between(x.Id, n.Id, succ.Id) {
 		n.succMtx.Lock()
 		//将x更新为自己的后继节点

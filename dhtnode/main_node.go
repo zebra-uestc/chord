@@ -17,7 +17,8 @@ import (
 
 var (
 	eMptyRequest   = &bm.DhtStatus{}
-	OrdererAddress = "0.0.0.0:50222"
+	OrdererAddress = ":6666"
+	GenesisesBlockHash = []byte{0x09,0xdd,0xec,0x54,0x73,0xcd,0xaa,0x05,0x39,0xe8,0x37,0x75,0x48,0x32,0x35,0x6d,0x13,0x34,0xf1,0xde,0x89,0x26,0x18,0xaa,0x42,0x2b,0x9b,0x5b,0xfb,0xd0,0x0f,0x77} 
 )
 
 type MainNode interface {
@@ -60,7 +61,11 @@ func NewMainNode() (MainNode, error) {
 	//	log.Fatalf("could not transcation Block: %v", err)
 	//}
 
-	return &mainNode{}, nil
+	return &mainNode{
+		prevBlockChan: make(chan *cb.Block, 10),
+		sendBlockChan: make(chan *cb.Block, 1),
+		blockNum: 1,
+		}, nil
 }
 
 type mainNodeInside interface {
@@ -74,6 +79,7 @@ func (mn *mainNode) StartDht(id, address string) {
 	nodeCnf.Timeout = 10 * time.Millisecond
 	nodeCnf.MaxIdle = 100 * time.Millisecond
 	node, _ := NewDhtNode(nodeCnf, nil)
+	// node.mainNodeAddress = 
 	mn.dhtNode = node
 }
 
@@ -97,6 +103,46 @@ func (mn *mainNode) StartTransMsgServer(address string) {
 }
 
 func (mn *mainNode) startTransBlockServer(address string) {
+
+		//给orderer发Block
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+	
+			for {
+				// todo
+				select {
+				//给区块编号
+				case prevBlock := <-mn.prevBlockChan:
+					println("get block")
+					newBlock := mn.FinalBlock(prevBlock)
+					//将新生成的块放到sendBlockChan转发给orderer
+					mn.sendBlockChan <- newBlock
+					//更新最后一个区块的哈希和区块个数
+					mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
+					mn.blockNum++
+	
+				case finalBlock := <-mn.sendBlockChan:
+					println("send block")
+					conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+					if err != nil {
+						log.Fatalf("did not connect: %v", err)
+					}
+					c := bm.NewBlockTranserClient(conn)
+					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+					defer cancel()
+					finalBlockByte,err := protoutil.Marshal(finalBlock)
+					if err != nil {
+						log.Fatalf("marshal err")
+					}
+					_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload:finalBlockByte})
+	
+				case <-mn.GetShutdownCh():
+					ticker.Stop()
+				}
+			}
+		}()
+	
+
 	println("TransBlockServer listen:", address)
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
@@ -109,40 +155,6 @@ func (mn *mainNode) startTransBlockServer(address string) {
 		log.Fatal("fail to  serve:", err)
 	}
 
-	//给orderer发Block
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-
-		for {
-			select {
-			//给区块编号
-			case prevBlock := <-mn.prevBlockChan:
-				newBlock := mn.FinalBlock(prevBlock)
-				//将新生成的块放到sendBlockChan转发给orderer
-				mn.sendBlockChan <- newBlock
-				//更新最后一个区块的哈希和区块个数
-				mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
-				mn.blockNum++
-
-			case finalBlock := <-mn.sendBlockChan:
-				conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-				if err != nil {
-					log.Fatalf("did not connect: %v", err)
-				}
-				c := bm.NewBlockTranserClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				defer cancel()
-				finalBlockByte,err :=proto.Marshal(finalBlock)
-				if err != nil {
-					log.Fatalf("marshal err")
-				}
-				_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload:finalBlockByte})
-
-			case <-mn.GetShutdownCh():
-				ticker.Stop()
-			}
-		}
-	}()
 
 	println("TransBlockServer serve end")
 }
@@ -165,11 +177,6 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
-type message struct {
-	configSeq uint64
-	normalMsg *bm.Envelope
-	configMsg *bm.Envelope
-}
 
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
@@ -185,9 +192,9 @@ func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStat
 	if err != nil {
 		log.Println("hashVal err: ", err)
 	}
-	// //通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
+	//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
 	err = mn.Set(hashKey, value)
-	return nil, err
+	return &bm.DhtStatus{}, nil
 }
 
 //接收其他节点的block
@@ -198,15 +205,16 @@ func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockByt
 	if err != nil {
 		return nil, err
 	} 
-	proto.Unmarshal(blockByte.BlockPayload, block)
-	finalBlock := mainNode.FinalBlock(block)
-	mainNode.prevBlockChan <- finalBlock
-	return nil, nil
+	mainNode.prevBlockChan <- block
+	return &bm.DhtStatus{}, nil
 }
 
 //给区块编号
 func (mainNode *mainNode) FinalBlock(block *cb.Block) *cb.Block {
 	block.Header.PreviousHash = mainNode.lastBlockHash
+	if(mainNode.blockNum == 1){
+		block.Header.PreviousHash = GenesisesBlockHash
+	}
 	block.Header.Number = mainNode.blockNum
 	return block
 }

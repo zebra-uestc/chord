@@ -15,18 +15,21 @@ var emptyMethodError = errors.New("Not Implemented Method")
 
 type TxStorage interface {
 	Storage
-	GetMsgChan() chan *message
+	GetMsgChan() chan *Message
 }
 
 func NewtxStorage(hashFunc func() hash.Hash) TxStorage {
-	return &txStorage{}
+	
+	return &txStorage{
+		setMsgChan: make(chan *Message, 10),
+	}
 }
 
 type txStorage struct {
-	setMsgChan chan *message
+	setMsgChan chan *Message
 }
 
-type message struct {
+type Message struct {
 	ConfigSeq uint64
 	NormalMsg *cb.Envelope
 	ConfigMsg *cb.Envelope
@@ -37,7 +40,7 @@ func (txs *txStorage) Set(key []byte, value []byte) error {
 	if err := proto.Unmarshal(value, msgByte); err != nil{
 		return err
 	}
-	msg := &message{
+	msg := &Message{
 		ConfigSeq: msgByte.ConfigSeq, 
 		NormalMsg: protoutil.UnmarshalEnvelopeOrPanic(msgByte.NormalMsg), 
 		ConfigMsg: protoutil.UnmarshalEnvelopeOrPanic(msgByte.ConfigMsg),
@@ -46,7 +49,7 @@ func (txs *txStorage) Set(key []byte, value []byte) error {
 	return nil
 }
 
-func (txs *txStorage) GetMsgChan() chan *message {
+func (txs *txStorage) GetMsgChan() chan *Message {
 	return txs.setMsgChan
 }
 

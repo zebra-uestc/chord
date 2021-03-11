@@ -51,7 +51,7 @@ func main() {
 	// if we're not ready to receive when the signal is sent.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-	<-time.After(10 * time.Second)
+	<-time.After(1 * time.Second)
 	<-c
 	mainNode.Stop()
 }

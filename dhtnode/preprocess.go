@@ -10,7 +10,6 @@ import (
 	"github.com/hyperledger/fabric/common/channelconfig"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/protoutil"
-
 )
 
 /*
@@ -43,7 +42,7 @@ func (dhtn *dhtNode) DefaultDhtConfig() *DhtConfig {
 	return &DhtConfig{MaxMessageCount: 500,
 		AbsoluteMaxBytes:  10 * 1024 * 1024,
 		PreferredMaxBytes: 2 * 1024 * 1024,
-		MainNodeAddress:   "0.0.0.0:8001",
+		MainNodeAddress:   ":8002",
 		BatchTimeout:      2 * time.Second}
 }
 
@@ -133,7 +132,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 		messageBatches = append(messageBatches, []*cb.Envelope{msg})
 
 		// Record that this batch took no time to fill
-		dhtn.Metrics.BlockFillDuration.With("channel", dhtn.ChannelID).Observe(0)
+		// dhtn.Metrics.BlockFillDuration.With("channel", dhtn.ChannelID).Observe(0)
 
 		return
 	}
@@ -165,9 +164,9 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 
 // Cut returns the current batch and starts a new one
 func (dhtn *dhtNode) Cut() []*cb.Envelope {
-	if dhtn.pendingBatch != nil {
-		dhtn.Metrics.BlockFillDuration.With("channel", dhtn.ChannelID).Observe(time.Since(dhtn.PendingBatchStartTime).Seconds())
-	}
+	// if dhtn.pendingBatch != nil {
+		// dhtn.Metrics.BlockFillDuration.With("channel", dhtn.ChannelID).Observe(time.Since(dhtn.PendingBatchStartTime).Seconds())
+	// }
 	dhtn.PendingBatchStartTime = time.Time{}
 	batch := dhtn.pendingBatch
 	dhtn.pendingBatch = nil
