@@ -42,7 +42,7 @@ func (dhtn *dhtNode) DefaultDhtConfig() *DhtConfig {
 	return &DhtConfig{MaxMessageCount: 500,
 		AbsoluteMaxBytes:  10 * 1024 * 1024,
 		PreferredMaxBytes: 2 * 1024 * 1024,
-		MainNodeAddress:   ":8002",
+		MainNodeAddress:   "127.0.0.1:8002",
 		BatchTimeout:      2 * time.Second}
 }
 
