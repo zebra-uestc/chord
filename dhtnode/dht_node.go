@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/zebra-uestc/chord"
@@ -16,27 +15,26 @@ import (
 )
 
 var (
-	emptyPrevHash = []byte{}
+	emptyPrevHash  = []byte{}
 	toMainNodeAddr = "127.0.0.1:8002"
 )
 
 type dhtNode struct {
+	IsMainNode            bool
 	exitChan              chan struct{}
 	pendingBatch          []*cb.Envelope
 	pendingBatchSizeBytes uint32
 	PendingBatchStartTime time.Time
-	mainNodeAddress       string
 	ChannelID             string
 	*chord.Node
-	dhtConfig *DhtConfig
-	mn        mainNodeInside
+	mn mainNodeInside
 	// Metrics   *Metrics
 }
 
 func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
-	// todo
-	if dhtn.Addr != dhtn.mainNodeAddress {
-		conn, err := grpc.Dial(dhtn.dhtConfig.MainNodeAddress, grpc.WithInsecure(), grpc.WithBlock())
+
+	if !dhtn.IsMainNode {
+		conn, err := grpc.Dial(MAINNODEADDRESS, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
@@ -65,8 +63,6 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 	node, err := chord.NewNode(cnf, joinNode)
 	dhtnode := &dhtNode{Node: node}
 
-	//加载默认配置
-	dhtnode.dhtConfig = dhtnode.DefaultDhtConfig()
 	if err != nil {
 		log.Println("transport start error:", err)
 		return nil, err
@@ -84,12 +80,12 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 	return dhtnode, err
 }
 
-func (dhtnode *dhtNode)PrevBlock(sendMsgChan chan *chord.Message) {
+func (dhtnode *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 	var timer <-chan time.Time
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			if msg.ConfigMsg == nil || msg.ConfigMsg.Payload == nil{
+			if msg.ConfigMsg == nil || msg.ConfigMsg.Payload == nil {
 				batches, pending := dhtnode.Ordered(msg.NormalMsg)
 				//出块并发送给mainnode或者orderer
 				for _, batch := range batches {
@@ -108,8 +104,8 @@ func (dhtnode *dhtNode)PrevBlock(sendMsgChan chan *chord.Message) {
 				case timer == nil && pending:
 					// Timer is not already running and there are messages pending, so start it
 					//默认时间1s
-					timer = time.After(dhtnode.dhtConfig.BatchTimeout)
-					logger.Debugf("Just began %s batch timer", dhtnode.dhtConfig.BatchTimeout.String())
+					timer = time.After(BATCHTIMEOUT)
+					logger.Debugf("Just began %s batch timer", BATCHTIMEOUT.String())
 				default:
 					// Do nothing when:
 					// 1. Timer is already running and there are messages pending

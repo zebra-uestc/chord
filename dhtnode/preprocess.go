@@ -22,34 +22,6 @@ type OrdererConfigFetcher interface {
 	OrdererConfig() (channelconfig.Orderer, bool)
 }
 
-type DhtConfig struct {
-	// Simply specified as number of messages for now, in the future
-	// we may want to allow this to be specified by size in bytes
-	MaxMessageCount uint32
-	// The byte count of the serialized messages in a batch cannot
-	// exceed this value.
-	AbsoluteMaxBytes uint32
-	// The byte count of the serialized messages in a batch should not
-	// exceed this value.
-	PreferredMaxBytes uint32
-
-	MainNodeAddress string
-
-	BatchTimeout time.Duration
-}
-
-func (dhtn *dhtNode) DefaultDhtConfig() *DhtConfig {
-	return &DhtConfig{MaxMessageCount: 500,
-		AbsoluteMaxBytes:  10 * 1024 * 1024,
-		PreferredMaxBytes: 2 * 1024 * 1024,
-		MainNodeAddress:   ":8002",
-		BatchTimeout:      2 * time.Second}
-}
-
-func (dhtn *dhtNode) load() {
-
-}
-
 // CreateNextBlock creates a new block with the next block number, and the given contents.
 func (dhtn *dhtNode) PreCreateNextBlock(messages []*cb.Envelope) *cb.Block {
 	// previousBlockHash := protoutil.BlockHeaderHash(bw.lastBlock.Header)
@@ -119,8 +91,8 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 	}
 
 	messageSizeBytes := messageSizeBytes(msg)
-	if messageSizeBytes > dhtn.dhtConfig.PreferredMaxBytes {
-		logger.Debugf("The current message, with %v bytes, is larger than the preferred batch size of %v bytes and will be isolated.", messageSizeBytes, dhtn.dhtConfig.PreferredMaxBytes)
+	if messageSizeBytes > PREFERREDMAXBYTES {
+		logger.Debugf("The current message, with %v bytes, is larger than the preferred batch size of %v bytes and will be isolated.", messageSizeBytes, PREFERREDMAXBYTES)
 
 		// cut pending batch, if it has any messages
 		if len(dhtn.pendingBatch) > 0 {
@@ -137,7 +109,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 		return
 	}
 
-	messageWillOverflowBatchSizeBytes := dhtn.pendingBatchSizeBytes+messageSizeBytes > dhtn.dhtConfig.PreferredMaxBytes
+	messageWillOverflowBatchSizeBytes := dhtn.pendingBatchSizeBytes+messageSizeBytes > PREFERREDMAXBYTES
 
 	if messageWillOverflowBatchSizeBytes {
 		logger.Debugf("The current message, with %v bytes, will overflow the pending batch of %v bytes.", messageSizeBytes, dhtn.pendingBatchSizeBytes)
@@ -152,7 +124,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 	dhtn.pendingBatchSizeBytes += messageSizeBytes
 	pending = true
 
-	if uint32(len(dhtn.pendingBatch)) >= dhtn.dhtConfig.MaxMessageCount {
+	if uint32(len(dhtn.pendingBatch)) >= MAXMESSAGECOUNT {
 		logger.Debugf("Batch size met, cutting batch")
 		messageBatch := dhtn.Cut()
 		messageBatches = append(messageBatches, messageBatch)
