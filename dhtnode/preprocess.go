@@ -10,6 +10,7 @@ import (
 	"github.com/hyperledger/fabric/common/channelconfig"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/protoutil"
+	"github.com/zebra-uestc/chord/config"
 )
 
 /*
@@ -39,7 +40,7 @@ func (dhtn *dhtNode) PreCreateNextBlock(messages []*cb.Envelope) *cb.Block {
 	}
 
 	// block := protoutil.NewBlock(bw.lastBlock.Header.Number+1, previousBlockHash)
-	block := NewBlock(0, emptyPrevHash)
+	block := NewBlock(0, []byte{})
 	block.Header.DataHash = protoutil.BlockDataHash(data)
 	block.Data = data
 
@@ -91,8 +92,8 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 	}
 
 	messageSizeBytes := messageSizeBytes(msg)
-	if messageSizeBytes > PREFERREDMAXBYTES {
-		logger.Debugf("The current message, with %v bytes, is larger than the preferred batch size of %v bytes and will be isolated.", messageSizeBytes, PREFERREDMAXBYTES)
+	if messageSizeBytes > config.PreferredMaxBytes {
+		logger.Debugf("The current message, with %v bytes, is larger than the preferred batch size of %v bytes and will be isolated.", messageSizeBytes, config.PreferredMaxBytes)
 
 		// cut pending batch, if it has any messages
 		if len(dhtn.pendingBatch) > 0 {
@@ -109,7 +110,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 		return
 	}
 
-	messageWillOverflowBatchSizeBytes := dhtn.pendingBatchSizeBytes+messageSizeBytes > PREFERREDMAXBYTES
+	messageWillOverflowBatchSizeBytes := dhtn.pendingBatchSizeBytes+messageSizeBytes > config.PreferredMaxBytes
 
 	if messageWillOverflowBatchSizeBytes {
 		logger.Debugf("The current message, with %v bytes, will overflow the pending batch of %v bytes.", messageSizeBytes, dhtn.pendingBatchSizeBytes)
@@ -124,7 +125,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 	dhtn.pendingBatchSizeBytes += messageSizeBytes
 	pending = true
 
-	if uint32(len(dhtn.pendingBatch)) >= MAXMESSAGECOUNT {
+	if uint32(len(dhtn.pendingBatch)) >= config.MaxMessageCount {
 		logger.Debugf("Batch size met, cutting batch")
 		messageBatch := dhtn.Cut()
 		messageBatches = append(messageBatches, messageBatch)
