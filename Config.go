@@ -1,4 +1,4 @@
-package dhtnode
+package chord
 
 import "time"
 

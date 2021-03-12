@@ -50,6 +50,7 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 		if err != nil {
 			log.Fatalf("could not transcation Block: %v", err)
 		}
+		conn.Close()
 		return err
 	} else {
 		// 将生成的Block放到mainNode底下的Channel中
@@ -82,14 +83,24 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 
 func (dhtnode *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 	var timer <-chan time.Time
+
+	var cnt uint = 0 // test
+
 	for {
 		select {
-		case msg := <-sendMsgChan:
+		case msg, ok := <-sendMsgChan:
+			if !ok {
+				println("channel sendMsgChan is closed!")
+			}
 			if msg.ConfigMsg == nil || msg.ConfigMsg.Payload == nil {
 				batches, pending := dhtnode.Ordered(msg.NormalMsg)
 				//出块并发送给mainnode或者orderer
 				for _, batch := range batches {
 					block := dhtnode.PreCreateNextBlock(batch)
+
+					cnt = cnt + 1
+					// println("PreBlock", cnt)
+
 					//将PreCreateNextBlock传给MainNode
 					err := dhtnode.DhtInsideTransBlock(block)
 					if err != nil {
@@ -145,6 +156,8 @@ func (dhtnode *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 		case <-dhtnode.GetShutdownCh():
 			logger.Debugf("Exiting")
 			return
+		default:
+			// do nothing
 		}
 	}
 }
