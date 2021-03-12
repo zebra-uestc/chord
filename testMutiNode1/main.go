@@ -36,9 +36,8 @@ func StartDht(id string, address string, joinNode *cm.Node) {
 
 
 func main() {
-	
 	//mainnode节点启动的地址为8001
-	sister := chord.NewInode("0", "0.0.0.0:8001")
+	sister := chord.NewInode("0", "192.168.137.1:8001")
 	StartDht("2", addresses[0], sister)
 	StartDht("3", addresses[1], sister)
 

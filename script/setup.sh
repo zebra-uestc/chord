@@ -8,7 +8,7 @@ KillProcessForPort(){
     NEED_PORT=(6666 7050 8001 8002 8003 8004)
     for port in "${NEED_PORT[@]}"
     do
-        pid=`lsof -i:$port | grep "localhost:$port (LISTEN)" | awk '{print $2}'`
+        pid=`lsof -i:$port | grep "$port (LISTEN)" | awk '{print $2}'`
         if [ -n "${pid}" ]
         then
             echo "kill $pid for port $port"

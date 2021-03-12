@@ -4,29 +4,24 @@ import (
 	"log"
 	"os"
 	"os/signal"
+
 	// "strconv"
 	"time"
 
+	"github.com/zebra-uestc/chord/config"
 	"github.com/zebra-uestc/chord/dhtnode"
 )
 
 var mainNode dhtnode.MainNode
 
-var addresses = []string{
-	"127.0.0.1:8001",
-	"127.0.0.1:8002",
-	"127.0.0.1:8003",
-	"127.0.0.1:8004",
-}
-
 func main() {
 	mainNode, err := dhtnode.NewMainNode()
 	//mainnode节点启动的地址为8001
-	mainNode.StartDht("0", addresses[0])
+	mainNode.StartDht("0", config.MainNodeAddressLocal)
 	//mainNode接收来自其他DHT节点的block的地址8002
-	mainNode.StartTransBlockServer(addresses[1])
+	mainNode.StartTransBlockServer(config.MainNodeAddressBlock)
 	//mainNode接受来自orderer的Msg的地址8003
-	mainNode.StartTransMsgServer(addresses[2])
+	mainNode.StartTransMsgServer(config.MainNodeAddressMsg)
 
 	if err != nil {
 		log.Fatalln(err)
