@@ -3,6 +3,7 @@ package dhtnode
 import (
 	"context"
 	"crypto/sha256"
+	"sync"
 
 	"log"
 	"net"

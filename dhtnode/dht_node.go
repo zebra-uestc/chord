@@ -34,7 +34,7 @@ type dhtNode struct {
 func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 
 	if !dhtn.IsMainNode {
-		conn, err := grpc.Dial(MAINNODEADDRESS, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial(chord.MAINNODEADDRESSMSG, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
@@ -115,8 +115,8 @@ func (dhtnode *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 				case timer == nil && pending:
 					// Timer is not already running and there are messages pending, so start it
 					//默认时间1s
-					timer = time.After(BATCHTIMEOUT)
-					logger.Debugf("Just began %s batch timer", BATCHTIMEOUT.String())
+					timer = time.After(chord.BATCHTIMEOUT)
+					logger.Debugf("Just began %s batch timer", chord.BATCHTIMEOUT.String())
 				default:
 					// Do nothing when:
 					// 1. Timer is already running and there are messages pending
