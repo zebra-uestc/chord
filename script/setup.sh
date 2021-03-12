@@ -51,6 +51,17 @@ fi
 if [ "$1" == "down" ]
 then
     echo "closing process..."
+    NEED_PORT=(6666 7050 8001 8002 8003 8004)
+    for port in "${NEED_PORT[@]}"
+    do
+        pid=`lsof -i:$port | grep "localhost:$port (LISTEN)" | awk '{print $2}'`
+        if [ -n "${pid}" ]
+        then
+            echo "kill $pid for port $port"
+            kill -9 $pid
+        fi
+    done
+
     END_PROCESS_NAME=("cmd/orderer/main.go" "deliver_stdout/client.go" "broadcast_msg/client.go" "go run server/main.go")
     for name in "${END_PROCESS_NAME[@]}"
     do

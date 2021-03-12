@@ -19,7 +19,7 @@ import (
 var (
 	eMptyRequest   = &bm.DhtStatus{}
 	OrdererAddress = "127.0.0.1:6666"
-	// GenesisesBlockHash = []byte{0x09,0xdd,0xec,0x54,0x73,0xcd,0xaa,0x05,0x39,0xe8,0x37,0x75,0x48,0x32,0x35,0x6d,0x13,0x34,0xf1,0xde,0x89,0x26,0x18,0xaa,0x42,0x2b,0x9b,0x5b,0xfb,0xd0,0x0f,0x77} 
+	// GenesisesBlockHash = []byte{0x09,0xdd,0xec,0x54,0x73,0xcd,0xaa,0x05,0x39,0xe8,0x37,0x75,0x48,0x32,0x35,0x6d,0x13,0x34,0xf1,0xde,0x89,0x26,0x18,0xaa,0x42,0x2b,0x9b,0x5b,0xfb,0xd0,0x0f,0x77}
 )
 
 type MainNode interface {
@@ -41,8 +41,8 @@ type mainNode struct {
 	//lastBlockCnf *bm.Config
 	lastBlockHash []byte
 	blockNum      uint64
+	mutex         sync.RWMutex
 }
-
 
 // NewMainNode 创建mainNode节点
 // 其中会向Orderer询问配置，如果无法通信，则等待1分钟
@@ -61,12 +61,14 @@ func NewMainNode() (MainNode, error) {
 		log.Fatalf("could not transcation Block: %v", err)
 	}
 
+	conn.Close()
+
 	return &mainNode{
 		prevBlockChan: make(chan *cb.Block, 10),
 		sendBlockChan: make(chan *cb.Block, 1),
-		blockNum: cnf.LastBlockNum,
+		blockNum:      cnf.LastBlockNum,
 		lastBlockHash: cnf.PrevBlockHash,
-		}, nil
+	}, nil
 }
 
 type mainNodeInside interface {
@@ -113,32 +115,59 @@ func (mn *mainNode) startTransBlockServer(address string) {
 			// todo
 			select {
 			//给区块编号
-			case prevBlock := <-mn.prevBlockChan:
-				println("get block")
+			case prevBlock, ok := <-mn.prevBlockChan:
+				if !ok {
+					println("channel prevBlockChan is closed!")
+				}
 				newBlock := mn.FinalBlock(prevBlock)
+
 				//将新生成的块放到sendBlockChan转发给orderer
 				mn.sendBlockChan <- newBlock
 				//更新最后一个区块的哈希和区块个数
+				mn.mutex.Lock()
+
 				mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
 				mn.blockNum++
+				mn.mutex.Unlock()
 
-			case finalBlock := <-mn.sendBlockChan:
+				// println("full block", newBlock.Header.Number)
+
+			case finalBlock, ok := <-mn.sendBlockChan:
+				if !ok {
+					println("channel sendBlockChan is closed!")
+				}
+				// println("to send", finalBlock.Header.Number)
 
 				conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
 				if err != nil {
 					log.Fatalf("did not connect: %v", err)
 				}
+
+				// println("to send2", finalBlock.Header.Number)
+
 				c := bm.NewBlockTranserClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+
+				// println("to send3", finalBlock.Header.Number)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 				defer cancel()
 				finalBlockByte, err := protoutil.Marshal(finalBlock)
 				if err != nil {
 					log.Fatalf("marshal err")
 				}
+
+				// println("to send4", finalBlock.Header.Number)
+
 				_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
+
+				// println("send block", finalBlock.Header.Number)
+
+				conn.Close()
 
 			case <-mn.GetShutdownCh():
 				ticker.Stop()
+			default:
+				// do nothing
 			}
 		}
 	}()
