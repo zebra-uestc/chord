@@ -22,3 +22,6 @@ const MainNodeAddressMsg string = "127.0.0.1:8002"
 
 // BathchTimeout the time for cutting a batch if there are not enough Msg
 const BathchTimeout time.Duration = 2 * time.Second
+
+// OrdererAddress the orderer consensus dht address
+const OrdererAddress string = "127.0.0.1:6666"

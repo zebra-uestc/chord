@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"time"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -14,14 +15,11 @@ import (
 	"github.com/zebra-uestc/chord"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	"google.golang.org/grpc"
+	"github.com/zebra-uestc/chord/config"
 )
 
-var (
-	eMptyRequest   = &bm.DhtStatus{}
-	OrdererAddress = "127.0.0.1:6666"
-	// GenesisesBlockHash = []byte{0x09,0xdd,0xec,0x54,0x73,0xcd,0xaa,0x05,0x39,0xe8,0x37,0x75,0x48,0x32,0x35,0x6d,0x13,0x34,0xf1,0xde,0x89,0x26,0x18,0xaa,0x42,0x2b,0x9b,0x5b,0xfb,0xd0,0x0f,0x77}
-)
-
+// MainNode 主节点，负责接受Orderer的Msg，通过node的内部机制转发给其它DhtNode
+// 接受其它DhtNode及自身的出块，排序后发送给Orderer
 type MainNode interface {
 	AddNode(id string, addr string) error
 	StartDht(id string, address string)
@@ -49,7 +47,7 @@ type mainNode struct {
 func NewMainNode() (MainNode, error) {
 	//向orderer询问lastBlock
 	log.Println("Loading Config...")
-	conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(config.OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -138,7 +136,7 @@ func (mn *mainNode) startTransBlockServer(address string) {
 				}
 				// println("to send", finalBlock.Header.Number)
 
-				conn, err := grpc.Dial(OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+				conn, err := grpc.Dial(config.OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
 				if err != nil {
 					log.Fatalf("did not connect: %v", err)
 				}
@@ -224,22 +222,22 @@ func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStat
 	return &bm.DhtStatus{}, nil
 }
 
-//接收其他节点的block
-func (mainNode *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
+// TransBlock 接收其他节点的block
+func (mn *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
 	//反序列化为Block
 	// block := &cb.Block{}
 	block, err := protoutil.UnmarshalBlock(blockByte.BlockPayload)
 	if err != nil {
 		return nil, err
 	}
-	mainNode.prevBlockChan <- block
+	mn.prevBlockChan <- block
 	return &bm.DhtStatus{}, nil
 }
 
-//给区块编号
-func (mainNode *mainNode) FinalBlock(block *cb.Block) *cb.Block {
-	block.Header.PreviousHash = mainNode.lastBlockHash
-	block.Header.Number = mainNode.blockNum
+// FinalBlock 给区块编号
+func (mn *mainNode) FinalBlock(block *cb.Block) *cb.Block {
+	block.Header.PreviousHash = mn.lastBlockHash
+	block.Header.Number = mn.blockNum
 	return block
 }
 
