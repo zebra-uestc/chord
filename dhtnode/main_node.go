@@ -13,9 +13,9 @@ import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/zebra-uestc/chord"
+	"github.com/zebra-uestc/chord/config"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	"google.golang.org/grpc"
-	"github.com/zebra-uestc/chord/config"
 )
 
 // MainNode 主节点，负责接受Orderer的Msg，通过node的内部机制转发给其它DhtNode
@@ -40,6 +40,8 @@ type mainNode struct {
 	lastBlockHash []byte
 	blockNum      uint64
 	mutex         sync.RWMutex
+
+	Transport *GrpcTransport
 }
 
 // NewMainNode 创建mainNode节点
@@ -61,12 +63,20 @@ func NewMainNode() (MainNode, error) {
 
 	conn.Close()
 
-	return &mainNode{
+	mn := &mainNode{
 		prevBlockChan: make(chan *cb.Block, 10),
 		sendBlockChan: make(chan *cb.Block, 1),
 		blockNum:      cnf.LastBlockNum,
 		lastBlockHash: cnf.PrevBlockHash,
-	}, nil
+		Transport:     NewGrpcTransport(),
+	}
+
+	//给preblock标号，并给orderer发Block
+	go mn.Process()
+	// 开启回收旧连接
+	go mn.Transport.Start()
+
+	return mn, nil
 }
 
 type mainNodeInside interface {
@@ -105,70 +115,6 @@ func (mn *mainNode) StartTransMsgServer(address string) {
 }
 
 func (mn *mainNode) startTransBlockServer(address string) {
-	//给orderer发Block
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-
-		for {
-			// todo
-			select {
-			//给区块编号
-			case prevBlock, ok := <-mn.prevBlockChan:
-				if !ok {
-					println("channel prevBlockChan is closed!")
-				}
-				newBlock := mn.FinalBlock(prevBlock)
-
-				//将新生成的块放到sendBlockChan转发给orderer
-				mn.sendBlockChan <- newBlock
-				//更新最后一个区块的哈希和区块个数
-				mn.mutex.Lock()
-
-				mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
-				mn.blockNum++
-				mn.mutex.Unlock()
-
-				// println("full block", newBlock.Header.Number)
-
-			case finalBlock, ok := <-mn.sendBlockChan:
-				if !ok {
-					println("channel sendBlockChan is closed!")
-				}
-				// println("to send", finalBlock.Header.Number)
-
-				conn, err := grpc.Dial(config.OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-				if err != nil {
-					log.Fatalf("did not connect: %v", err)
-				}
-
-				// println("to send2", finalBlock.Header.Number)
-
-				c := bm.NewBlockTranserClient(conn)
-
-				// println("to send3", finalBlock.Header.Number)
-
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-				defer cancel()
-				finalBlockByte, err := protoutil.Marshal(finalBlock)
-				if err != nil {
-					log.Fatalf("marshal err")
-				}
-
-				// println("to send4", finalBlock.Header.Number)
-
-				_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
-
-				// println("send block", finalBlock.Header.Number)
-
-				conn.Close()
-
-			case <-mn.GetShutdownCh():
-				ticker.Stop()
-			default:
-				// do nothing
-			}
-		}
-	}()
 
 	println("TransBlockServer listen:", address)
 	lis, err := net.Listen("tcp", address)
@@ -252,4 +198,63 @@ func (mn *mainNode) hashValue(key []byte) ([]byte, error) {
 
 func (mn *mainNode) Stop() {
 	close(mn.GetShutdownCh())
+}
+
+func (mn *mainNode) Process() {
+	// ticker := time.NewTicker(1 * time.Second)
+
+	for {
+		// todo
+		select {
+		//给区块编号
+		case prevBlock, ok := <-mn.prevBlockChan:
+			if !ok {
+				println("channel prevBlockChan is closed!")
+			}
+			newBlock := mn.FinalBlock(prevBlock)
+
+			//将新生成的块放到sendBlockChan转发给orderer
+			mn.sendBlockChan <- newBlock
+			//更新最后一个区块的哈希和区块个数
+			mn.mutex.Lock()
+
+			mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
+			mn.blockNum++
+			mn.mutex.Unlock()
+
+			// println("full block", newBlock.Header.Number)
+
+		case finalBlock, ok := <-mn.sendBlockChan:
+			if !ok {
+				println("channel sendBlockChan is closed!")
+			}
+
+			// conn, err := grpc.Dial(config.OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
+			// if err != nil {
+			// 	log.Fatalf("did not connect: %v", err)
+			// }
+			// c := bm.NewBlockTranserClient(conn)
+			c, err := mn.Transport.getConn(config.OrdererAddress)
+
+			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.timeout)
+			defer cancel()
+			finalBlockByte, err := protoutil.Marshal(finalBlock)
+			if err != nil {
+				log.Fatalf("marshal err")
+			}
+
+			// println("to send4", finalBlock.Header.Number)
+
+			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
+
+			// println("send block", finalBlock.Header.Number)
+
+			// conn.Close()
+
+		// case <-mn.GetShutdownCh():
+		// 	ticker.Stop()
+		default:
+			// do nothing
+		}
+	}
 }

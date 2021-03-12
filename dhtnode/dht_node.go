@@ -9,10 +9,9 @@ import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/zebra-uestc/chord"
+	"github.com/zebra-uestc/chord/config"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	cm "github.com/zebra-uestc/chord/models/chord"
-	"google.golang.org/grpc"
-	"github.com/zebra-uestc/chord/config"
 )
 
 type dhtNode struct {
@@ -25,12 +24,14 @@ type dhtNode struct {
 	*chord.Node
 	mn mainNodeInside
 	// Metrics   *Metrics
+
+	Transport *GrpcTransport
 }
 
 // NewDhtNode 创建DhtNode
 func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 	node, err := chord.NewNode(cnf, joinNode)
-	dhtnode := &dhtNode{Node: node}
+	dhtnode := &dhtNode{Node: node, Transport: NewGrpcTransport()}
 
 	if err != nil {
 		log.Println("transport start error:", err)
@@ -46,17 +47,21 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 
 	//生成prevBlock
 	go dhtnode.PrevBlock(sendMsgChan)
+	//回收旧连接
+	go dhtnode.Transport.Start()
 	return dhtnode, err
 }
 
 func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	if !dhtn.IsMainNode {
-		conn, err := grpc.Dial(config.MainNodeAddressMsg, grpc.WithInsecure(), grpc.WithBlock())
-		if err != nil {
-			log.Fatalf("did not connect: %v", err)
-		}
-		c := bm.NewBlockTranserClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		// conn, err := grpc.Dial(config.MainNodeAddressMsg, grpc.WithInsecure(), grpc.WithBlock())
+		// if err != nil {
+		// 	log.Fatalf("did not connect: %v", err)
+		// }
+		// c := bm.NewBlockTranserClient(conn)
+		c, err := dhtn.Transport.getConn(config.MainNodeAddressMsg)
+
+		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.timeout)
 		defer cancel()
 
 		finalBlockByte, err := protoutil.Marshal(block)
@@ -67,14 +72,13 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 		if err != nil {
 			log.Fatalf("could not transcation Block: %v", err)
 		}
-		conn.Close()
+		// conn.Close()
 		return err
 	}
 	// 将生成的Block放到mainNode底下的Channel中
 	dhtn.mn.SendPrevBlockToChan(block)
 	return nil
 }
-
 
 // PrevBlock 将区块进行排序并发送给orderer
 func (dhtn *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
