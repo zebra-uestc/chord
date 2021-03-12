@@ -23,14 +23,16 @@ then
     SCRIPT_DIR="$CURRENT_DIR/$(dirname $0)"
     CHORD_PATH="$SCRIPT_DIR/.."
     FABRIC_PATH="$CHORD_PATH/../fabric"
+
+    export FABRIC_CFG_PATH="$FABRIC_PATH/sampleconfig"
+    echo "配置文件路径FABRIC_CFG_PATH=$FABRIC_CFG_PATH"
+
     if [ "$1" == "up" ]
     then
         KillProcessForPort
 
         mkdir -p $SCRIPT_DIR/tmp
         cd $FABRIC_PATH
-        FABRIC_CFG_PATH="$FABRIC_PATH/sampleconfig"
-        echo "配置文件路径FABRIC_CFG_PATH=$FABRIC_CFG_PATH"
         echo "启动Orderer..."
         go run cmd/orderer/main.go > $SCRIPT_DIR/tmp/Orderer.log 2>&1 &
         sleep 1s
