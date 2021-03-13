@@ -15,13 +15,13 @@ const AbsoluteMaxBytes uint32 = 10 * 1024 * 1024
 const PreferredMaxBytes uint32 = 2 * 1024 * 1024
 
 // MainNodeAddressLocal the local mainNode's address
-const MainNodeAddressLocal string = "127.0.0.1:8001"
+const MainNodeAddressLocal string = "10.206.0.9:8001"
 
 // MainNodeAddressMsg the mainNode's address for transmit PrevBlock
-const MainNodeAddressMsg string = "127.0.0.1:8003"
+const MainNodeAddressMsg string = ":8003"
 
 // MainNodeAddressBlock the mainNode's address for transmit PrevBlock
-const MainNodeAddressBlock string = "127.0.0.1:8002"
+const MainNodeAddressBlock string = "10.206.0.9:8002"
 
 // BathchTimeout the time for cutting a batch if there are not enough Msg
 const BathchTimeout time.Duration = 2 * time.Second

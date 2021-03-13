@@ -2,7 +2,7 @@
 # fabric要与chord在同一层级
 # 参数说明：
 #   up：启动order、deliver、main_node
-#   msg: 启动boardcaster发送消息，后跟参数消息数量与消息大小（可选，单位为MB）
+#   msg: 启动boardcaster发送消息，后跟参数消息数量与消息大小（可选，单位为KB）
 #   down: 清理所有有关进程
 KillProcessForPort(){
     NEED_PORT=(6666 7050 8001 8002 8003 8004)
@@ -51,7 +51,7 @@ then
             then
                 go run orderer/sample_clients/broadcast_msg/client.go -channelID system-channel -messages $2
             else
-                go run orderer/sample_clients/broadcast_msg/client.go -channelID system-channel -messages $2 -size $(($3*1024*1024))
+                go run orderer/sample_clients/broadcast_msg/client.go -channelID system-channel -messages $2 -size $[$3*1024]
             fi
         else
             echo "请输入要发送的Msg数量"
