@@ -16,12 +16,10 @@ import (
 var mainNode dhtnode.MainNode
 
 var addresses = []string{
-	"127.0.0.1:9001",
-	"127.0.0.1:9002",
-	"127.0.0.1:9003",
+	"10.206.0.11:9001",
+	"10.206.0.11:9002",
+	"10.206.0.11:9003",
 }
-
-
 
 //启动其他节点，id,address为各节点本地addr
 func StartDht(id string, address string, joinNode *cm.Node) {
@@ -37,7 +35,7 @@ func StartDht(id string, address string, joinNode *cm.Node) {
 
 func main() {
 	//mainnode节点启动的地址为8001
-	sister := chord.NewInode("0", "118.195.134.132:8001")
+	sister := chord.NewInode("0", "10.206.0.9:8001")
 	StartDht("2", addresses[0], sister)
 	StartDht("3", addresses[1], sister)
 

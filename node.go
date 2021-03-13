@@ -154,9 +154,8 @@ func NewNode(cnf *Config, joinNode *cm.Node) (*Node, error) {
 	}()
 
 	// Peridoically checkes whether predecessor has failed.
-
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(1 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
@@ -560,7 +559,7 @@ func (n *Node) stabilize() {
 	//如果此时新加入了节点p，则x是节点p，此时需要将p更新为自己的后继节点
 	x, err := n.getPredecessorRPC(succ)
 	if err != nil || x == nil {
-		fmt.Println("error getting predecessor, ", err, x)
+		// fmt.Println("error getting predecessor, ", err, x)
 		return
 	}
 	//x.Id在（n.Id, succ.Id）之间

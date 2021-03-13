@@ -59,7 +59,7 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 		// 	log.Fatalf("did not connect: %v", err)
 		// }
 		// c := bm.NewBlockTranserClient(conn)
-		c, err := dhtn.Transport.getConn(config.MainNodeAddressMsg)
+		c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
 
 		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.timeout)
 		defer cancel()
