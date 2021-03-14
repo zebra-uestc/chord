@@ -40,6 +40,8 @@ type mainNode struct {
 	lastBlockHash []byte
 	blockNum      uint64
 	mutex         sync.RWMutex
+	isFirstMsg	  bool
+	
 
 	Transport *GrpcTransport
 }
@@ -69,6 +71,7 @@ func NewMainNode() (MainNode, error) {
 		blockNum:      cnf.LastBlockNum,
 		lastBlockHash: cnf.PrevBlockHash,
 		Transport:     NewGrpcTransport(),
+		isFirstMsg:    true,
 	}
 
 	//给preblock标号，并给orderer发Block
@@ -149,9 +152,16 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
+
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
-
+	if msg.NormalMsg != nil {
+		if mn.isFirstMsg {
+			startTime := time.Now().UnixNano()/1e6
+			println(startTime)
+			mn.isFirstMsg = false
+		}
+	}
 	// println("get msg")
 	value, err := proto.Marshal(msg)
 
@@ -247,7 +257,8 @@ func (mn *mainNode) Process() {
 
 			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
 
-			// println("send block", finalBlock.Header.Number)
+			
+			println("send block time:", time.Now().UnixNano()/1e6)
 
 			// conn.Close()
 
