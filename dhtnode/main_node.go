@@ -31,7 +31,7 @@ type MainNode interface {
 type server struct{}
 
 type mainNode struct {
-	*dhtNode
+	*DhtNode
 	prevBlockChan chan *cb.Block
 	sendBlockChan chan *cb.Block
 	bm.UnimplementedBlockTranserServer
@@ -94,7 +94,7 @@ func (mn *mainNode) StartDht(id, address string) {
 	nodeCnf.MaxIdle = 100 * time.Millisecond
 	node, _ := NewDhtNode(nodeCnf, nil)
 	node.mn = mn // main_node继承dht_node，要给dht_node里面的mn变量初始化
-	mn.dhtNode = node
+	mn.DhtNode = node
 	mn.IsMainNode = true
 }
 
@@ -148,13 +148,14 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	cnf.Addr = addr
 	cnf.Timeout = 10 * time.Millisecond
 	cnf.MaxIdle = 100 * time.Millisecond
-	_, err := NewDhtNode(cnf, mn.dhtNode.Node.Node)
+	_, err := NewDhtNode(cnf, mn.DhtNode.Node.Node)
 	return err
 }
 
 
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
+	//记录收到第一条消息的时间
 	if msg.NormalMsg != nil {
 		if mn.isFirstMsg {
 			startTime := time.Now().UnixNano()/1e6
@@ -207,7 +208,7 @@ func (mn *mainNode) hashValue(key []byte) ([]byte, error) {
 }
 
 func (mn *mainNode) Stop() {
-	close(mn.GetShutdownCh())
+	mn.Node.Stop()
 }
 
 func (mn *mainNode) Process() {
@@ -257,7 +258,7 @@ func (mn *mainNode) Process() {
 
 			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
 
-			
+			//记录每个区块的发送时间
 			println("send block time:", time.Now().UnixNano()/1e6)
 
 			// conn.Close()

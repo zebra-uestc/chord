@@ -2,7 +2,7 @@ package config
 
 import "time"
 
-const LocalAddress string = "10.206.0.11"
+const LocalAddress string = "10.206.0.9"
 
 // MaxMessageCount simply specified as number of messages for now, in the future
 // we may want to allow this to be specified by size in bytes

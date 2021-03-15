@@ -14,7 +14,7 @@ import (
 	cm "github.com/zebra-uestc/chord/models/chord"
 )
 
-type dhtNode struct {
+type DhtNode struct {
 	IsMainNode            bool
 	exitChan              chan struct{}
 	pendingBatch          []*cb.Envelope
@@ -29,9 +29,9 @@ type dhtNode struct {
 }
 
 // NewDhtNode 创建DhtNode
-func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
+func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*DhtNode, error) {
 	node, err := chord.NewNode(cnf, joinNode)
-	dhtnode := &dhtNode{Node: node, Transport: NewGrpcTransport()}
+	dhtnode := &DhtNode{Node: node, Transport: NewGrpcTransport()}
 
 	if err != nil {
 		log.Println("transport start error:", err)
@@ -52,7 +52,7 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*dhtNode, error) {
 	return dhtnode, err
 }
 
-func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
+func (dhtn *DhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	if !dhtn.IsMainNode {
 		// conn, err := grpc.Dial(config.MainNodeAddressMsg, grpc.WithInsecure(), grpc.WithBlock())
 		// if err != nil {
@@ -60,7 +60,9 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 		// }
 		// c := bm.NewBlockTranserClient(conn)
 		c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
-
+		if err != nil {
+			log.Fatalln("Can't get conn with main_node: ", err)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.timeout)
 		defer cancel()
 
@@ -81,7 +83,7 @@ func (dhtn *dhtNode) DhtInsideTransBlock(block *cb.Block) error {
 }
 
 // PrevBlock 将区块进行排序并发送给orderer
-func (dhtn *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
+func (dhtn *DhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 	var timer <-chan time.Time
 
 	var cnt uint = 0 // test
@@ -92,6 +94,8 @@ func (dhtn *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 			if !ok {
 				println("channel sendMsgChan is closed!")
 			}
+			// cnt++
+			// println("msg count :",cnt)
 			if msg.ConfigMsg == nil || msg.ConfigMsg.Payload == nil {
 				batches, pending := dhtn.Ordered(msg.NormalMsg)
 				//出块并发送给mainnode或者orderer
@@ -99,7 +103,7 @@ func (dhtn *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 					block := dhtn.PreCreateNextBlock(batch)
 
 					cnt = cnt + 1
-					// println("PreBlock", cnt)
+					println("PreBlock", cnt)
 
 					//将PreCreateNextBlock传给MainNode
 					err := dhtn.DhtInsideTransBlock(block)
@@ -152,6 +156,8 @@ func (dhtn *dhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 			if err != nil {
 				log.Fatalf("could not transcation Block: %v", err)
 			}
+			cnt++
+			println("PreBlock", cnt)
 
 		case <-dhtn.GetShutdownCh():
 			logger.Debugf("Exiting")
