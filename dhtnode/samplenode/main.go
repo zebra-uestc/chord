@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"time"
 	"flag"
 	"os/signal"
 
@@ -17,8 +16,8 @@ func startDht(id string, address string, joinNode *cm.Node) *dhtnode.DhtNode {
 	nodeCnf := chord.DefaultConfig()
 	nodeCnf.Id = id
 	nodeCnf.Addr = address
-	nodeCnf.Timeout = 10 * time.Millisecond
-	nodeCnf.MaxIdle = 100 * time.Millisecond
+	nodeCnf.Timeout = config.GrpcTimeout
+	nodeCnf.MaxIdle = 100 * config.GrpcTimeout
 	dhtNode, _ := dhtnode.NewDhtNode(nodeCnf, joinNode)
 	dhtNode.IsMainNode = false
 	return dhtNode

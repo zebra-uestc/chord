@@ -21,7 +21,6 @@ import (
 // MainNode 主节点，负责接受Orderer的Msg，通过node的内部机制转发给其它DhtNode
 // 接受其它DhtNode及自身的出块，排序后发送给Orderer
 type MainNode interface {
-	AddNode(id string, addr string) error
 	StartDht(id string, address string)
 	StartTransMsgServer(address string)
 	StartTransBlockServer(address string)
@@ -56,7 +55,7 @@ func NewMainNode() (MainNode, error) {
 		log.Fatalf("did not connect: %v", err)
 	}
 	c := bm.NewBlockTranserClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), config.GrpcTimeout)
 	defer cancel()
 	cnf, err := c.LoadConfig(ctx, &bm.DhtStatus{})
 	if err != nil {
@@ -90,8 +89,8 @@ func (mn *mainNode) StartDht(id, address string) {
 	nodeCnf := chord.DefaultConfig()
 	nodeCnf.Id = id
 	nodeCnf.Addr = address
-	nodeCnf.Timeout = 10 * time.Millisecond
-	nodeCnf.MaxIdle = 100 * time.Millisecond
+	nodeCnf.Timeout = config.GrpcTimeout
+	nodeCnf.MaxIdle = 100 * config.GrpcTimeout
 	node, _ := NewDhtNode(nodeCnf, nil)
 	node.mn = mn // main_node继承dht_node，要给dht_node里面的mn变量初始化
 	mn.DhtNode = node
@@ -141,17 +140,6 @@ func (mn *mainNode) StartTransBlockServer(address string) {
 func (mn *mainNode) SendPrevBlockToChan(block *cb.Block) {
 	mn.prevBlockChan <- block
 }
-
-func (mn *mainNode) AddNode(id string, addr string) error {
-	cnf := chord.DefaultConfig()
-	cnf.Id = id
-	cnf.Addr = addr
-	cnf.Timeout = 10 * time.Millisecond
-	cnf.MaxIdle = 100 * time.Millisecond
-	_, err := NewDhtNode(cnf, mn.DhtNode.Node.Node)
-	return err
-}
-
 
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
@@ -247,7 +235,7 @@ func (mn *mainNode) Process() {
 			// c := bm.NewBlockTranserClient(conn)
 			c, err := mn.Transport.getConn(config.OrdererAddress)
 
-			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.timeout)
+			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
 			defer cancel()
 			finalBlockByte, err := protoutil.Marshal(finalBlock)
 			if err != nil {

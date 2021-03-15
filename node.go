@@ -25,8 +25,6 @@ func DefaultConfig() *Config {
 
 	n.DialOpts = append(n.DialOpts,
 		grpc.WithBlock(),
-		//修改超时时间
-		grpc.WithTimeout(1*time.Hour),
 		grpc.FailOnNonTempDialError(true),
 		grpc.WithInsecure(),
 	)
@@ -586,7 +584,7 @@ func (n *Node) checkPredecessor() {
 	if pred != nil {
 		err := n.transport.CheckPredecessor(pred)
 		if err != nil {
-			fmt.Println("predecessor failed!", err)
+			// fmt.Println("predecessor failed!", err)
 			n.predMtx.Lock()
 			n.predecessor = nil
 			n.predMtx.Unlock()

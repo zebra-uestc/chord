@@ -16,15 +16,12 @@ import (
 
 type DhtNode struct {
 	IsMainNode            bool
-	exitChan              chan struct{}
 	pendingBatch          []*cb.Envelope
 	pendingBatchSizeBytes uint32
 	PendingBatchStartTime time.Time
 	ChannelID             string
 	*chord.Node
 	mn mainNodeInside
-	// Metrics   *Metrics
-
 	Transport *GrpcTransport
 }
 
@@ -54,16 +51,11 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*DhtNode, error) {
 
 func (dhtn *DhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	if !dhtn.IsMainNode {
-		// conn, err := grpc.Dial(config.MainNodeAddressMsg, grpc.WithInsecure(), grpc.WithBlock())
-		// if err != nil {
-		// 	log.Fatalf("did not connect: %v", err)
-		// }
-		// c := bm.NewBlockTranserClient(conn)
 		c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
 		if err != nil {
 			log.Fatalln("Can't get conn with main_node: ", err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.config.Timeout)
 		defer cancel()
 
 		finalBlockByte, err := protoutil.Marshal(block)
