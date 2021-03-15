@@ -6,7 +6,7 @@ KillProcessForPort(){
         if [ -n "${pid}" ]
         then
             echo "kill $pid for port $port"
-            kill -9 $pid
+            kill -2 $pid
         fi
     done
 }
