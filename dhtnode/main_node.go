@@ -141,19 +141,6 @@ func (mn *mainNode) SendPrevBlockToChan(block *cb.Block) {
 	mn.prevBlockChan <- block
 }
 
-<<<<<<< HEAD
-func (mn *mainNode) AddNode(id string, addr string) error {
-	cnf := chord.DefaultConfig()
-	cnf.Id = id
-	cnf.Addr = addr
-	cnf.Timeout = 10 * time.Millisecond
-	cnf.MaxIdle = 100 * time.Millisecond
-	_, err := NewDhtNode(cnf, mn.dhtNode.Node.Node)
-	return err
-}
-
-=======
->>>>>>> 3ebe3c9a69b9c4f2750ab92b29e6da697107622d
 // order To dht的处理
 func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 	for {
