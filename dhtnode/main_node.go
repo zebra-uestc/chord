@@ -171,15 +171,13 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 			log.Println("hashVal err: ", err)
 		}
 		//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-		err = mn.Set(hashKey, value)
-
+		mn.Set(hashKey, value)
 	}
 }
 
 // TransBlock 接收其他节点的block
 func (mn *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
 	//反序列化为Block
-	// block := &cb.Block{}
 	block, err := protoutil.UnmarshalBlock(blockByte.BlockPayload)
 	if err != nil {
 		return nil, err
@@ -210,7 +208,6 @@ func (mn *mainNode) Stop() {
 
 func (mn *mainNode) Process() {
 	// ticker := time.NewTicker(1 * time.Second)
-
 	for {
 		// todo
 		select {
@@ -224,11 +221,8 @@ func (mn *mainNode) Process() {
 			//将新生成的块放到sendBlockChan转发给orderer
 			mn.sendBlockChan <- newBlock
 			//更新最后一个区块的哈希和区块个数
-			mn.mutex.Lock()
-
 			mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
 			mn.blockNum++
-			mn.mutex.Unlock()
 
 			// println("full block", newBlock.Header.Number)
 
@@ -237,33 +231,25 @@ func (mn *mainNode) Process() {
 				println("channel sendBlockChan is closed!")
 			}
 
-			// conn, err := grpc.Dial(config.OrdererAddress, grpc.WithInsecure(), grpc.WithBlock())
-			// if err != nil {
-			// 	log.Fatalf("did not connect: %v", err)
-			// }
-			// c := bm.NewBlockTranserClient(conn)
 			c, err := mn.Transport.getConn(config.OrdererAddress)
-
+			if err != nil{
+				log.Fatalln("Can't connect:", err)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
-			defer cancel()
 			finalBlockByte, err := protoutil.Marshal(finalBlock)
 			if err != nil {
 				log.Fatalf("marshal err")
 			}
-
-			// println("to send4", finalBlock.Header.Number)
-
 			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
-
+			if err != nil{
+				log.Fatalln("Can't trans block to orderer:", err)
+			}
 			//记录每个区块的发送时间
 			println("send block time:", time.Now().UnixNano()/1e6)
-
-			// conn.Close()
+			cancel()
 
 		// case <-mn.GetShutdownCh():
 		// 	ticker.Stop()
-		default:
-			// do nothing
 		}
 	}
 }

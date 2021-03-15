@@ -10,11 +10,11 @@ const MaxMessageCount uint32 = 100
 
 // AbsoluteMaxBytes The byte count of the serialized messages in a batch cannot
 // exceed this value.
-const AbsoluteMaxBytes uint32 = 10 * 1024 * 1024
+const AbsoluteMaxBytes uint32 = 1000 * 1024 * 1024
 
 // PreferredMaxBytes The byte count of the serialized messages in a batch should not
 // exceed this value.
-const PreferredMaxBytes uint32 = 2 * 1024 * 1024
+const PreferredMaxBytes uint32 = 200 * 1024 * 1024
 
 // MainNodeAddressLocal the local mainNode's address
 const MainNodeAddressLocal string = LocalAddress + ":8001"
