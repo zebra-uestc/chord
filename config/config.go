@@ -2,7 +2,7 @@ package config
 
 import "time"
 
-const LocalAddress string = "10.206.0.9"
+const LocalAddress string = "10.206.0.11"
 
 // MaxMessageCount simply specified as number of messages for now, in the future
 // we may want to allow this to be specified by size in bytes
@@ -30,3 +30,6 @@ const BathchTimeout time.Duration = 2 * time.Second
 
 // OrdererAddress the orderer consensus dht address
 const OrdererAddress string = "127.0.0.1:6666"
+
+// GrpcTimeout grpc time out
+const GrpcTimeout time.Duration = 2 * time.Second

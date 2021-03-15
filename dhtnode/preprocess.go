@@ -24,7 +24,7 @@ type OrdererConfigFetcher interface {
 }
 
 // CreateNextBlock creates a new block with the next block number, and the given contents.
-func (dhtn *dhtNode) PreCreateNextBlock(messages []*cb.Envelope) *cb.Block {
+func (dhtn *DhtNode) PreCreateNextBlock(messages []*cb.Envelope) *cb.Block {
 	// previousBlockHash := protoutil.BlockHeaderHash(bw.lastBlock.Header)
 
 	data := &cb.BlockData{
@@ -85,7 +85,7 @@ func NewBlock(seqNum uint64, previousHash []byte) *cb.Block {
 //   - impossible
 //
 // Note that messageBatches can not be greater than 2.
-func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope, pending bool) {
+func (dhtn *DhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope, pending bool) {
 	if len(dhtn.pendingBatch) == 0 {
 		// We are beginning a new batch, mark the time
 		dhtn.PendingBatchStartTime = time.Now()
@@ -136,7 +136,7 @@ func (dhtn *dhtNode) Ordered(msg *cb.Envelope) (messageBatches [][]*cb.Envelope,
 }
 
 // Cut returns the current batch and starts a new one
-func (dhtn *dhtNode) Cut() []*cb.Envelope {
+func (dhtn *DhtNode) Cut() []*cb.Envelope {
 	// if dhtn.pendingBatch != nil {
 		// dhtn.Metrics.BlockFillDuration.With("channel", dhtn.ChannelID).Observe(time.Since(dhtn.PendingBatchStartTime).Seconds())
 	// }

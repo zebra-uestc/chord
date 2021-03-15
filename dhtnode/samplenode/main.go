@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"time"
 	"flag"
 	"os/signal"
 
@@ -13,14 +12,15 @@ import (
 )
 
 // 启动其他节点，id,address为各节点本地addr
-func startDht(id string, address string, joinNode *cm.Node) {
+func startDht(id string, address string, joinNode *cm.Node) *dhtnode.DhtNode {
 	nodeCnf := chord.DefaultConfig()
 	nodeCnf.Id = id
 	nodeCnf.Addr = address
-	nodeCnf.Timeout = 10 * time.Millisecond
-	nodeCnf.MaxIdle = 100 * time.Millisecond
+	nodeCnf.Timeout = config.GrpcTimeout
+	nodeCnf.MaxIdle = 100 * config.GrpcTimeout
 	dhtNode, _ := dhtnode.NewDhtNode(nodeCnf, joinNode)
 	dhtNode.IsMainNode = false
+	return dhtNode
 }
 
 func main() {
@@ -40,10 +40,11 @@ func main() {
 		return
 	}
 	// 加入到mainnode的环上
-	startDht(id, addr, chord.NewInode("0", config.MainNodeAddressLocal))
+	dhtnode := startDht(id, addr, chord.NewInode("0", config.MainNodeAddressLocal))
 
 	// waiting ctrl+c
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
+	dhtnode.Stop()
 }

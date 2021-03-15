@@ -25,8 +25,6 @@ func DefaultConfig() *Config {
 
 	n.DialOpts = append(n.DialOpts,
 		grpc.WithBlock(),
-		//修改超时时间
-		grpc.WithTimeout(1*time.Hour),
 		grpc.FailOnNonTempDialError(true),
 		grpc.WithInsecure(),
 	)
@@ -111,15 +109,12 @@ func NewNode(cnf *Config, joinNode *cm.Node) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	
 	node.transport = transport
-
 	cm.RegisterChordServer(transport.server, node)
-
 	node.transport.Start()
-
+	time.Sleep(time.Duration(1)*time.Second)
 	//新增节点操作
-
 	if err := node.join(joinNode); err != nil {
 		return nil, err
 	}
@@ -586,7 +581,7 @@ func (n *Node) checkPredecessor() {
 	if pred != nil {
 		err := n.transport.CheckPredecessor(pred)
 		if err != nil {
-			fmt.Println("predecessor failed!", err)
+			// fmt.Println("predecessor failed!", err)
 			n.predMtx.Lock()
 			n.predecessor = nil
 			n.predMtx.Unlock()
@@ -717,26 +712,26 @@ func (n *Node) Notify(ctx context.Context, node *cm.Node) (*cm.ER, error) {
 	n.predMtx.Lock()
 	defer n.predMtx.Unlock()
 	//prevPredNode记录的更新n.predecessor后，之前的n.predecessor
-	var prevPredNode *cm.Node
+	// var prevPredNode *cm.Node
 
 	pred := n.predecessor
 	//若此时n没有前序节点或
 	//node.Id比n现有的前序节点pred.Id更加靠近n，则将node设置为n的前序节点
 	if pred == nil || between(node.Id, pred.Id, n.Id) {
 		fmt.Println("predecessor...", node.Addr)
-		if n.predecessor != nil {
-			prevPredNode = n.predecessor
-		}
+		// if n.predecessor != nil {
+		// 	prevPredNode = n.predecessor
+		// }
 		n.predecessor = node
 
 		// 增加节点时transfer key的工作由移出数据的节点做
 		// transfer keys from current node to node's predecessor
-		if prevPredNode != nil {
-			if between(n.predecessor.Id, prevPredNode.Id, n.Id) {
-				fmt.Println("transferKeys() to", n.predecessor.Addr)
-				n.moveKeysFromLocal(prevPredNode, n.predecessor)
-			}
-		}
+		// if prevPredNode != nil {
+		// 	if between(n.predecessor.Id, prevPredNode.Id, n.Id) {
+		// 		fmt.Println("transferKeys() to", n.predecessor.Addr)
+		// 		n.moveKeysFromLocal(prevPredNode, n.predecessor)
+		// 	}
+		// }
 	}
 
 	return emptyRequest, nil
@@ -803,7 +798,7 @@ func (n *Node) Stop() {
 	n.predMtx.RUnlock()
 
 	if n.Node.Addr != succ.Addr && pred != nil {
-		n.moveKeysFromLocal(pred, succ)
+		// n.moveKeysFromLocal(pred, succ)
 		predErr := n.setPredecessorRPC(succ, pred)
 		succErr := n.setSuccessorRPC(pred, succ)
 		fmt.Println("stop errors: ", predErr, succErr)

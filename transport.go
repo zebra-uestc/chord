@@ -75,9 +75,9 @@ type GrpcTransport struct {
 }
 
 // func NewGrpcTransport(config *Config) (cm.ChordClient, error) {
-func NewGrpcTransport(config *Config) (*GrpcTransport, error) {
+func NewGrpcTransport(cnf *Config) (*GrpcTransport, error) {
 
-	addr := config.Addr
+	addr := cnf.Addr
 	// Try to start the listener
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -89,13 +89,13 @@ func NewGrpcTransport(config *Config) (*GrpcTransport, error) {
 	// Setup the transport
 	grp := &GrpcTransport{
 		sock:    listener.(*net.TCPListener),
-		timeout: config.Timeout,
-		maxIdle: config.MaxIdle,
+		timeout: cnf.Timeout,
+		maxIdle: cnf.MaxIdle,
 		pool:    pool,
-		config:  config,
+		config:  cnf,
 	}
 
-	grp.server = grpc.NewServer(config.ServerOpts...)
+	grp.server = grpc.NewServer(cnf.ServerOpts...)
 
 	// Done
 	return grp, nil

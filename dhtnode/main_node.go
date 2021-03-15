@@ -22,7 +22,6 @@ import (
 // MainNode 主节点，负责接受Orderer的Msg，通过node的内部机制转发给其它DhtNode
 // 接受其它DhtNode及自身的出块，排序后发送给Orderer
 type MainNode interface {
-	AddNode(id string, addr string) error
 	StartDht(id string, address string)
 	StartTransMsgServer(address string)
 	StartTransBlockServer(address string)
@@ -32,7 +31,7 @@ type MainNode interface {
 type server struct{}
 
 type mainNode struct {
-	*dhtNode
+	*DhtNode
 	prevBlockChan chan *cb.Block
 	sendBlockChan chan *cb.Block
 	bm.UnimplementedBlockTranserServer
@@ -56,7 +55,7 @@ func NewMainNode() (MainNode, error) {
 		log.Fatalf("did not connect: %v", err)
 	}
 	c := bm.NewBlockTranserClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), config.GrpcTimeout)
 	defer cancel()
 	cnf, err := c.LoadConfig(ctx, &bm.DhtStatus{})
 	if err != nil {
@@ -90,11 +89,11 @@ func (mn *mainNode) StartDht(id, address string) {
 	nodeCnf := chord.DefaultConfig()
 	nodeCnf.Id = id
 	nodeCnf.Addr = address
-	nodeCnf.Timeout = 10 * time.Millisecond
-	nodeCnf.MaxIdle = 100 * time.Millisecond
+	nodeCnf.Timeout = config.GrpcTimeout
+	nodeCnf.MaxIdle = 100 * config.GrpcTimeout
 	node, _ := NewDhtNode(nodeCnf, nil)
 	node.mn = mn // main_node继承dht_node，要给dht_node里面的mn变量初始化
-	mn.dhtNode = node
+	mn.DhtNode = node
 	mn.IsMainNode = true
 }
 
@@ -142,6 +141,7 @@ func (mn *mainNode) SendPrevBlockToChan(block *cb.Block) {
 	mn.prevBlockChan <- block
 }
 
+<<<<<<< HEAD
 func (mn *mainNode) AddNode(id string, addr string) error {
 	cnf := chord.DefaultConfig()
 	cnf.Id = id
@@ -152,6 +152,8 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
+=======
+>>>>>>> 3ebe3c9a69b9c4f2750ab92b29e6da697107622d
 // order To dht的处理
 func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 	for {
@@ -216,7 +218,7 @@ func (mn *mainNode) hashValue(key []byte) ([]byte, error) {
 }
 
 func (mn *mainNode) Stop() {
-	close(mn.GetShutdownCh())
+	mn.Node.Stop()
 }
 
 func (mn *mainNode) Process() {
@@ -255,7 +257,7 @@ func (mn *mainNode) Process() {
 			// c := bm.NewBlockTranserClient(conn)
 			c, err := mn.Transport.getConn(config.OrdererAddress)
 
-			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.timeout)
+			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
 			defer cancel()
 			finalBlockByte, err := protoutil.Marshal(finalBlock)
 			if err != nil {
