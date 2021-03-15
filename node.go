@@ -109,15 +109,12 @@ func NewNode(cnf *Config, joinNode *cm.Node) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	
 	node.transport = transport
-
 	cm.RegisterChordServer(transport.server, node)
-
 	node.transport.Start()
-
+	time.Sleep(time.Duration(1)*time.Second)
 	//新增节点操作
-
 	if err := node.join(joinNode); err != nil {
 		return nil, err
 	}

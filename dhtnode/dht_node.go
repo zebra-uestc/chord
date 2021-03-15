@@ -28,13 +28,11 @@ type DhtNode struct {
 // NewDhtNode 创建DhtNode
 func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*DhtNode, error) {
 	node, err := chord.NewNode(cnf, joinNode)
-	dhtnode := &DhtNode{Node: node, Transport: NewGrpcTransport()}
-
 	if err != nil {
 		log.Println("transport start error:", err)
 		return nil, err
 	}
-
+	dhtnode := &DhtNode{Node: node, Transport: NewGrpcTransport()}
 	txStore, ok := dhtnode.GetStorage().(chord.TxStorage)
 	if !ok {
 		log.Fatal("Storage Error")
