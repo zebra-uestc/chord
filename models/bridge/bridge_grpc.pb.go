@@ -14,15 +14,137 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+// MsgTranserClient is the client API for MsgTranser service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type MsgTranserClient interface {
+	//orderer（调用）将自己收到的Msg发送给mainNode（实现），mainnode通过Chord算法的Set操作转发给其他节点
+	TransMsg(ctx context.Context, opts ...grpc.CallOption) (MsgTranser_TransMsgClient, error)
+}
+
+type msgTranserClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMsgTranserClient(cc grpc.ClientConnInterface) MsgTranserClient {
+	return &msgTranserClient{cc}
+}
+
+func (c *msgTranserClient) TransMsg(ctx context.Context, opts ...grpc.CallOption) (MsgTranser_TransMsgClient, error) {
+	stream, err := c.cc.NewStream(ctx, &MsgTranser_ServiceDesc.Streams[0], "/bridge.MsgTranser/TransMsg", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &msgTranserTransMsgClient{stream}
+	return x, nil
+}
+
+type MsgTranser_TransMsgClient interface {
+	Send(*MsgBytes) error
+	CloseAndRecv() (*DhtStatus, error)
+	grpc.ClientStream
+}
+
+type msgTranserTransMsgClient struct {
+	grpc.ClientStream
+}
+
+func (x *msgTranserTransMsgClient) Send(m *MsgBytes) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *msgTranserTransMsgClient) CloseAndRecv() (*DhtStatus, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(DhtStatus)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// MsgTranserServer is the server API for MsgTranser service.
+// All implementations must embed UnimplementedMsgTranserServer
+// for forward compatibility
+type MsgTranserServer interface {
+	//orderer（调用）将自己收到的Msg发送给mainNode（实现），mainnode通过Chord算法的Set操作转发给其他节点
+	TransMsg(MsgTranser_TransMsgServer) error
+	mustEmbedUnimplementedMsgTranserServer()
+}
+
+// UnimplementedMsgTranserServer must be embedded to have forward compatible implementations.
+type UnimplementedMsgTranserServer struct {
+}
+
+func (UnimplementedMsgTranserServer) TransMsg(MsgTranser_TransMsgServer) error {
+	return status.Errorf(codes.Unimplemented, "method TransMsg not implemented")
+}
+func (UnimplementedMsgTranserServer) mustEmbedUnimplementedMsgTranserServer() {}
+
+// UnsafeMsgTranserServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MsgTranserServer will
+// result in compilation errors.
+type UnsafeMsgTranserServer interface {
+	mustEmbedUnimplementedMsgTranserServer()
+}
+
+func RegisterMsgTranserServer(s grpc.ServiceRegistrar, srv MsgTranserServer) {
+	s.RegisterService(&MsgTranser_ServiceDesc, srv)
+}
+
+func _MsgTranser_TransMsg_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MsgTranserServer).TransMsg(&msgTranserTransMsgServer{stream})
+}
+
+type MsgTranser_TransMsgServer interface {
+	SendAndClose(*DhtStatus) error
+	Recv() (*MsgBytes, error)
+	grpc.ServerStream
+}
+
+type msgTranserTransMsgServer struct {
+	grpc.ServerStream
+}
+
+func (x *msgTranserTransMsgServer) SendAndClose(m *DhtStatus) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *msgTranserTransMsgServer) Recv() (*MsgBytes, error) {
+	m := new(MsgBytes)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// MsgTranser_ServiceDesc is the grpc.ServiceDesc for MsgTranser service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var MsgTranser_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "bridge.MsgTranser",
+	HandlerType: (*MsgTranserServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "TransMsg",
+			Handler:       _MsgTranser_TransMsg_Handler,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "bridge.proto",
+}
+
 // BlockTranserClient is the client API for BlockTranser service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BlockTranserClient interface {
-	// 由mainNode调用，将生成好的Block发送到orderer
-	//当dht内部节点传块时，mainNode实现，将收到的Block放到本地的prevBlockChan中
-	// 由orderer实现，将收到的Block放到本地的receiveChan中
+	// dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
+	// mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
 	TransBlock(ctx context.Context, in *BlockBytes, opts ...grpc.CallOption) (*DhtStatus, error)
-	//由orderer实现，暂时还未实现
+	// main_node无须实现此函数
+	// main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
 	LoadConfig(ctx context.Context, in *DhtStatus, opts ...grpc.CallOption) (*Config, error)
 }
 
@@ -56,11 +178,11 @@ func (c *blockTranserClient) LoadConfig(ctx context.Context, in *DhtStatus, opts
 // All implementations must embed UnimplementedBlockTranserServer
 // for forward compatibility
 type BlockTranserServer interface {
-	// 由mainNode调用，将生成好的Block发送到orderer
-	//当dht内部节点传块时，mainNode实现，将收到的Block放到本地的prevBlockChan中
-	// 由orderer实现，将收到的Block放到本地的receiveChan中
+	// dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
+	// mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
 	TransBlock(context.Context, *BlockBytes) (*DhtStatus, error)
-	//由orderer实现，暂时还未实现
+	// main_node无须实现此函数
+	// main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
 	LoadConfig(context.Context, *DhtStatus) (*Config, error)
 	mustEmbedUnimplementedBlockTranserServer()
 }
@@ -138,94 +260,6 @@ var BlockTranser_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LoadConfig",
 			Handler:    _BlockTranser_LoadConfig_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "bridge.proto",
-}
-
-// MsgTranserClient is the client API for MsgTranser service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type MsgTranserClient interface {
-	//由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-	TransMsg(ctx context.Context, in *MsgBytes, opts ...grpc.CallOption) (*DhtStatus, error)
-}
-
-type msgTranserClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewMsgTranserClient(cc grpc.ClientConnInterface) MsgTranserClient {
-	return &msgTranserClient{cc}
-}
-
-func (c *msgTranserClient) TransMsg(ctx context.Context, in *MsgBytes, opts ...grpc.CallOption) (*DhtStatus, error) {
-	out := new(DhtStatus)
-	err := c.cc.Invoke(ctx, "/bridge.MsgTranser/TransMsg", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// MsgTranserServer is the server API for MsgTranser service.
-// All implementations must embed UnimplementedMsgTranserServer
-// for forward compatibility
-type MsgTranserServer interface {
-	//由mainNode实现，将从orderer收到的Msg通过Chord算法的Set操作转发给其他节点
-	TransMsg(context.Context, *MsgBytes) (*DhtStatus, error)
-	mustEmbedUnimplementedMsgTranserServer()
-}
-
-// UnimplementedMsgTranserServer must be embedded to have forward compatible implementations.
-type UnimplementedMsgTranserServer struct {
-}
-
-func (UnimplementedMsgTranserServer) TransMsg(context.Context, *MsgBytes) (*DhtStatus, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TransMsg not implemented")
-}
-func (UnimplementedMsgTranserServer) mustEmbedUnimplementedMsgTranserServer() {}
-
-// UnsafeMsgTranserServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to MsgTranserServer will
-// result in compilation errors.
-type UnsafeMsgTranserServer interface {
-	mustEmbedUnimplementedMsgTranserServer()
-}
-
-func RegisterMsgTranserServer(s grpc.ServiceRegistrar, srv MsgTranserServer) {
-	s.RegisterService(&MsgTranser_ServiceDesc, srv)
-}
-
-func _MsgTranser_TransMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgBytes)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgTranserServer).TransMsg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/bridge.MsgTranser/TransMsg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgTranserServer).TransMsg(ctx, req.(*MsgBytes))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// MsgTranser_ServiceDesc is the grpc.ServiceDesc for MsgTranser service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var MsgTranser_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "bridge.MsgTranser",
-	HandlerType: (*MsgTranserServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "TransMsg",
-			Handler:    _MsgTranser_TransMsg_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

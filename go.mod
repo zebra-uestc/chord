@@ -2,6 +2,8 @@ module github.com/zebra-uestc/chord
 
 go 1.16
 
+// replace github.com/zebra-uestc/chord/models/bridge => ./models/bridge
+
 require (
 	github.com/Knetic/govaluate v3.0.0+incompatible // indirect
 	github.com/Shopify/sarama v1.28.0 // indirect

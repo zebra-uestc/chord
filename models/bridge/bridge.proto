@@ -7,7 +7,7 @@ option go_package = "github.com/hyperledger/chord/dhtnode/bridge";
 // orderer  (Client) <-> main_node(Server)
 service MsgTranser{
     //orderer（调用）将自己收到的Msg发送给mainNode（实现），mainnode通过Chord算法的Set操作转发给其他节点
-    rpc TransMsg(MsgBytes) returns (DhtStatus){};
+    rpc TransMsg(stream MsgBytes) returns (DhtStatus){};
 }
 
 // dht_node (Client) <-> main_node(Server)

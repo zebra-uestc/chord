@@ -3,6 +3,7 @@ package dhtnode
 import (
 	"context"
 	"crypto/sha256"
+	"io"
 	"sync"
 
 	"log"
@@ -40,8 +41,7 @@ type mainNode struct {
 	lastBlockHash []byte
 	blockNum      uint64
 	mutex         sync.RWMutex
-	isFirstMsg	  bool
-	
+	isFirstMsg    bool
 
 	Transport *GrpcTransport
 }
@@ -152,31 +152,39 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 	return err
 }
 
-
 // order To dht的处理
-func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
-	//记录收到第一条消息的时间
-	if msg.NormalMsg != nil {
-		if mn.isFirstMsg {
-			startTime := time.Now().UnixNano()/1e6
-			println(startTime)
-			mn.isFirstMsg = false
+func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
+	for {
+		msg, err := receiver.Recv()
+		if err == io.EOF {
+			return receiver.SendAndClose(&bm.DhtStatus{})
 		}
-	}
-	// println("get msg")
-	value, err := proto.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		//记录收到第一条消息的时间
+		if msg.NormalMsg != nil {
+			if mn.isFirstMsg {
+				startTime := time.Now().UnixNano() / 1e6
+				println(startTime)
+				mn.isFirstMsg = false
+			}
+		}
+		// println("get msg")
+		value, err := proto.Marshal(msg)
 
-	if err != nil {
-		log.Println("Marshal err: ", err)
+		if err != nil {
+			log.Println("Marshal err: ", err)
+		}
+		//将value加密为hashKey
+		hashKey, err := mn.hashValue(value)
+		if err != nil {
+			log.Println("hashVal err: ", err)
+		}
+		//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
+		err = mn.Set(hashKey, value)
+
 	}
-	//将value加密为hashKey
-	hashKey, err := mn.hashValue(value)
-	if err != nil {
-		log.Println("hashVal err: ", err)
-	}
-	//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-	err = mn.Set(hashKey, value)
-	return &bm.DhtStatus{}, nil
 }
 
 // TransBlock 接收其他节点的block
