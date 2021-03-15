@@ -11,6 +11,9 @@ MainNode与Orderer跑在同一台主机上，启动（重启）需要输入
 关闭MainNode与Orderer需要输入
 `./script/setup.sh down`。
 
+删除已有块输入
+`rm -rf /tmp/hyperledger/`
+
 注意：Main主机需要fabric的工程与chord在同一级目录下，启动前修改[config.go](config/config.go)中的
 `LocalAddress`
 为Main主机在子网的IP地址。

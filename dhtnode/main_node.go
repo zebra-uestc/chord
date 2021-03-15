@@ -155,6 +155,7 @@ func (mn *mainNode) AddNode(id string, addr string) error {
 
 // order To dht的处理
 func (mn *mainNode) TransMsg(ctx context.Context, msg *bm.MsgBytes) (*bm.DhtStatus, error) {
+	//记录收到第一条消息的时间
 	if msg.NormalMsg != nil {
 		if mn.isFirstMsg {
 			startTime := time.Now().UnixNano()/1e6
@@ -257,7 +258,7 @@ func (mn *mainNode) Process() {
 
 			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
 
-			
+			//记录每个区块的发送时间
 			println("send block time:", time.Now().UnixNano()/1e6)
 
 			// conn.Close()
