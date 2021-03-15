@@ -149,6 +149,7 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 			return receiver.SendAndClose(&bm.DhtStatus{})
 		}
 		if err != nil {
+			log.Fatalln("Receive Msg from orderer err:",err)
 			return err
 		}
 		//记录收到第一条消息的时间
@@ -159,9 +160,7 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 				mn.isFirstMsg = false
 			}
 		}
-		// println("get msg")
 		value, err := proto.Marshal(msg)
-
 		if err != nil {
 			log.Println("Marshal err: ", err)
 		}
@@ -171,7 +170,9 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 			log.Println("hashVal err: ", err)
 		}
 		//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-		mn.Set(hashKey, value)
+		if err := mn.Set(hashKey, value); err != nil{
+			log.Fatalln("Set Msg Failed: ", err)
+		}
 	}
 }
 
@@ -235,11 +236,11 @@ func (mn *mainNode) Process() {
 			if err != nil{
 				log.Fatalln("Can't connect:", err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
 			finalBlockByte, err := protoutil.Marshal(finalBlock)
 			if err != nil {
 				log.Fatalf("marshal err")
-			}
+			}			
+			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
 			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
 			if err != nil{
 				log.Fatalln("Can't trans block to orderer:", err)
