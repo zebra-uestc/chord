@@ -15,13 +15,14 @@ import (
 )
 
 type DhtNode struct {
+	sendBlockChan         chan *cb.Block
 	IsMainNode            bool
 	pendingBatch          []*cb.Envelope
 	pendingBatchSizeBytes uint32
 	PendingBatchStartTime time.Time
 	ChannelID             string
 	*chord.Node
-	mn mainNodeInside
+	mn        mainNodeInside
 	Transport *GrpcTransport
 }
 
@@ -32,7 +33,7 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*DhtNode, error) {
 		log.Println("transport start error:", err)
 		return nil, err
 	}
-	dhtnode := &DhtNode{Node: node, Transport: NewGrpcTransport()}
+	dhtnode := &DhtNode{Node: node, Transport: NewGrpcTransport(), sendBlockChan: make(chan *cb.Block, 10)}
 	txStore, ok := dhtnode.GetStorage().(chord.TxStorage)
 	if !ok {
 		log.Fatal("Storage Error")
@@ -49,27 +50,47 @@ func NewDhtNode(cnf *chord.Config, joinNode *cm.Node) (*DhtNode, error) {
 
 func (dhtn *DhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	if !dhtn.IsMainNode {
-		c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
-		if err != nil {
-			log.Fatalln("Can't get conn with main_node: ", err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.config.Timeout)
-		defer cancel()
-
-		finalBlockByte, err := protoutil.Marshal(block)
-		if err != nil {
-			log.Fatalf("marshal err")
-		}
-		_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
-		if err != nil {
-			log.Fatalf("could not transcation Block: %v", err)
-		}
-		// conn.Close()
-		return err
+		dhtn.sendBlockChan <- block
+		return nil
 	}
 	// 将生成的Block放到mainNode底下的Channel中
 	dhtn.mn.SendPrevBlockToChan(block)
 	return nil
+}
+
+func (dhtn *DhtNode) TransBlockClient() error {
+	c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
+	if err != nil {
+		log.Fatalln("Can't get conn with main_node: ", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.config.Timeout)
+	defer cancel()
+
+	sender, err := c.TransBlock(ctx)
+	if err != nil {
+		return err
+	}
+
+	for preblock := range dhtn.sendBlockChan {
+
+		preBlockByte, err := protoutil.Marshal(preblock)
+		if err != nil {
+			log.Fatalf("marshal err")
+		}
+		err = sender.Send(&bm.BlockBytes{BlockPayload: preBlockByte})
+		if err != nil {
+			log.Fatalln("Can't trans block to orderer:", err)
+		}
+		//记录每个区块的发送时间
+		println("send block time:", time.Now().UnixNano()/1e6)
+
+	}
+	_, err = sender.CloseAndRecv()
+	if err != nil {
+		log.Fatalf("could not transcation MsgBytes: %v", err)
+	}
+
+	return err
 }
 
 // PrevBlock 将区块进行排序并发送给orderer
@@ -77,10 +98,15 @@ func (dhtn *DhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 	var timer <-chan time.Time
 
 	var cnt uint = 0 // test
+	count := 0
 
 	for {
 		select {
 		case msg, ok := <-sendMsgChan:
+			count = count + 1
+			if count == cap(dhtn.sendBlockChan) {
+				go dhtn.TransBlockClient()
+			}
 			if !ok {
 				println("channel sendMsgChan is closed!")
 			}

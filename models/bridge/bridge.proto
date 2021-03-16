@@ -15,7 +15,7 @@ service MsgTranser{
 service BlockTranser{
     // dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
     // mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
-    rpc TransBlock(BlockBytes) returns (DhtStatus){};
+    rpc TransBlock(stream BlockBytes) returns (DhtStatus){};
     // main_node无须实现此函数
     // main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
     rpc LoadConfig(DhtStatus) returns (Config){};

@@ -15,6 +15,7 @@ import (
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/zebra-uestc/chord"
 	"github.com/zebra-uestc/chord/config"
+	"github.com/zebra-uestc/chord/models/bridge"
 	bm "github.com/zebra-uestc/chord/models/bridge"
 	"google.golang.org/grpc"
 )
@@ -149,7 +150,7 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 			return receiver.SendAndClose(&bm.DhtStatus{})
 		}
 		if err != nil {
-			log.Fatalln("Receive Msg from orderer err:",err)
+			log.Fatalln("Receive Msg from orderer err:", err)
 			return err
 		}
 		//记录收到第一条消息的时间
@@ -170,21 +171,79 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 			log.Println("hashVal err: ", err)
 		}
 		//通过dht环转发到其他节点并存储在storage里面,并且放在同到Msgchan
-		if err := mn.Set(hashKey, value); err != nil{
+		if err := mn.Set(hashKey, value); err != nil {
 			log.Fatalln("Set Msg Failed: ", err)
 		}
 	}
 }
 
 // TransBlock 接收其他节点的block
-func (mn *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
-	//反序列化为Block
-	block, err := protoutil.UnmarshalBlock(blockByte.BlockPayload)
-	if err != nil {
-		return nil, err
+// func (mn *mainNode) TransBlock(ctx context.Context, blockByte *bm.BlockBytes) (*bm.DhtStatus, error) {
+// 	//反序列化为Block
+// 	block, err := protoutil.UnmarshalBlock(blockByte.BlockPayload)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	mn.prevBlockChan <- block
+// 	return &bm.DhtStatus{}, nil
+// }
+
+// TransBlock 接收其他节点的block
+func (mn *mainNode) TransBlock(receiver bm.BlockTranser_TransBlockServer) error {
+	for {
+		blockByte, err := receiver.Recv()
+		if err == io.EOF {
+			return receiver.SendAndClose(&bridge.DhtStatus{})
+		}
+		if err != nil {
+			log.Fatalln("Receive Msg from orderer err:", err)
+			return err
+		}
+		//反序列化为Block
+		block, err := protoutil.UnmarshalBlock(blockByte.BlockPayload)
+		if err != nil {
+			return err
+		}
+		mn.prevBlockChan <- block
+
 	}
-	mn.prevBlockChan <- block
-	return &bm.DhtStatus{}, nil
+
+	return nil
+}
+
+func (mn *mainNode) TransBlockClient() error {
+
+	c, err := mn.Transport.getConn(config.OrdererAddress)
+	if err != nil {
+		log.Fatalln("Can't connect:", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
+	defer cancel()
+	sender, err := c.TransBlock(ctx)
+	if err != nil {
+		return err
+	}
+
+	for finalBlock := range mn.sendBlockChan {
+
+		finalBlockByte, err := protoutil.Marshal(finalBlock)
+		if err != nil {
+			log.Fatalf("marshal err")
+		}
+		err = sender.Send(&bm.BlockBytes{BlockPayload: finalBlockByte})
+		if err != nil {
+			log.Fatalln("Can't trans block to orderer:", err)
+		}
+		//记录每个区块的发送时间
+		println("send block time:", time.Now().UnixNano()/1e6)
+
+	}
+	_, err = sender.CloseAndRecv()
+	if err != nil {
+		log.Fatalf("could not transcation MsgBytes: %v", err)
+	}
+
+	return err
 }
 
 // FinalBlock 给区块编号
@@ -208,6 +267,7 @@ func (mn *mainNode) Stop() {
 }
 
 func (mn *mainNode) Process() {
+	count := 0
 	// ticker := time.NewTicker(1 * time.Second)
 	for {
 		// todo
@@ -225,32 +285,15 @@ func (mn *mainNode) Process() {
 			mn.lastBlockHash = protoutil.BlockHeaderHash(newBlock.Header)
 			mn.blockNum++
 
+			count = count + 1
+			if count == cap(mn.sendBlockChan) {
+				go mn.TransBlockClient()
+			}
+
 			// println("full block", newBlock.Header.Number)
+		default:
+			// do nothing
 
-		case finalBlock, ok := <-mn.sendBlockChan:
-			if !ok {
-				println("channel sendBlockChan is closed!")
-			}
-
-			c, err := mn.Transport.getConn(config.OrdererAddress)
-			if err != nil{
-				log.Fatalln("Can't connect:", err)
-			}
-			finalBlockByte, err := protoutil.Marshal(finalBlock)
-			if err != nil {
-				log.Fatalf("marshal err")
-			}			
-			ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
-			_, err = c.TransBlock(ctx, &bm.BlockBytes{BlockPayload: finalBlockByte})
-			if err != nil{
-				log.Fatalln("Can't trans block to orderer:", err)
-			}
-			//记录每个区块的发送时间
-			println("send block time:", time.Now().UnixNano()/1e6)
-			cancel()
-
-		// case <-mn.GetShutdownCh():
-		// 	ticker.Stop()
 		}
 	}
 }

@@ -142,7 +142,7 @@ var MsgTranser_ServiceDesc = grpc.ServiceDesc{
 type BlockTranserClient interface {
 	// dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
 	// mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
-	TransBlock(ctx context.Context, in *BlockBytes, opts ...grpc.CallOption) (*DhtStatus, error)
+	TransBlock(ctx context.Context, opts ...grpc.CallOption) (BlockTranser_TransBlockClient, error)
 	// main_node无须实现此函数
 	// main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
 	LoadConfig(ctx context.Context, in *DhtStatus, opts ...grpc.CallOption) (*Config, error)
@@ -156,13 +156,38 @@ func NewBlockTranserClient(cc grpc.ClientConnInterface) BlockTranserClient {
 	return &blockTranserClient{cc}
 }
 
-func (c *blockTranserClient) TransBlock(ctx context.Context, in *BlockBytes, opts ...grpc.CallOption) (*DhtStatus, error) {
-	out := new(DhtStatus)
-	err := c.cc.Invoke(ctx, "/bridge.BlockTranser/TransBlock", in, out, opts...)
+func (c *blockTranserClient) TransBlock(ctx context.Context, opts ...grpc.CallOption) (BlockTranser_TransBlockClient, error) {
+	stream, err := c.cc.NewStream(ctx, &BlockTranser_ServiceDesc.Streams[0], "/bridge.BlockTranser/TransBlock", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &blockTranserTransBlockClient{stream}
+	return x, nil
+}
+
+type BlockTranser_TransBlockClient interface {
+	Send(*BlockBytes) error
+	CloseAndRecv() (*DhtStatus, error)
+	grpc.ClientStream
+}
+
+type blockTranserTransBlockClient struct {
+	grpc.ClientStream
+}
+
+func (x *blockTranserTransBlockClient) Send(m *BlockBytes) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *blockTranserTransBlockClient) CloseAndRecv() (*DhtStatus, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(DhtStatus)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *blockTranserClient) LoadConfig(ctx context.Context, in *DhtStatus, opts ...grpc.CallOption) (*Config, error) {
@@ -180,7 +205,7 @@ func (c *blockTranserClient) LoadConfig(ctx context.Context, in *DhtStatus, opts
 type BlockTranserServer interface {
 	// dht_node（调用）将切好的块发送给mainNode（实现），mainNode将收到的Block放其revBlockChan中进行排序
 	// mainNode（调用）将排好序的块发送给orderer（实现），orderer将收到的Block放到其receiveChan中
-	TransBlock(context.Context, *BlockBytes) (*DhtStatus, error)
+	TransBlock(BlockTranser_TransBlockServer) error
 	// main_node无须实现此函数
 	// main_node（调用）从orderer（实现）中获取已有的块数与上一个块的哈希值
 	LoadConfig(context.Context, *DhtStatus) (*Config, error)
@@ -191,8 +216,8 @@ type BlockTranserServer interface {
 type UnimplementedBlockTranserServer struct {
 }
 
-func (UnimplementedBlockTranserServer) TransBlock(context.Context, *BlockBytes) (*DhtStatus, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TransBlock not implemented")
+func (UnimplementedBlockTranserServer) TransBlock(BlockTranser_TransBlockServer) error {
+	return status.Errorf(codes.Unimplemented, "method TransBlock not implemented")
 }
 func (UnimplementedBlockTranserServer) LoadConfig(context.Context, *DhtStatus) (*Config, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LoadConfig not implemented")
@@ -210,22 +235,30 @@ func RegisterBlockTranserServer(s grpc.ServiceRegistrar, srv BlockTranserServer)
 	s.RegisterService(&BlockTranser_ServiceDesc, srv)
 }
 
-func _BlockTranser_TransBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BlockBytes)
-	if err := dec(in); err != nil {
+func _BlockTranser_TransBlock_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BlockTranserServer).TransBlock(&blockTranserTransBlockServer{stream})
+}
+
+type BlockTranser_TransBlockServer interface {
+	SendAndClose(*DhtStatus) error
+	Recv() (*BlockBytes, error)
+	grpc.ServerStream
+}
+
+type blockTranserTransBlockServer struct {
+	grpc.ServerStream
+}
+
+func (x *blockTranserTransBlockServer) SendAndClose(m *DhtStatus) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *blockTranserTransBlockServer) Recv() (*BlockBytes, error) {
+	m := new(BlockBytes)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(BlockTranserServer).TransBlock(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/bridge.BlockTranser/TransBlock",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BlockTranserServer).TransBlock(ctx, req.(*BlockBytes))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 func _BlockTranser_LoadConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -254,14 +287,16 @@ var BlockTranser_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BlockTranserServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "TransBlock",
-			Handler:    _BlockTranser_TransBlock_Handler,
-		},
-		{
 			MethodName: "LoadConfig",
 			Handler:    _BlockTranser_LoadConfig_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "TransBlock",
+			Handler:       _BlockTranser_TransBlock_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "bridge.proto",
 }
