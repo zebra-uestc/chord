@@ -2,11 +2,11 @@ package config
 
 import "time"
 
-const LocalAddress string = "10.206.0.11"
+const LocalAddress string = "127.0.0.1"
 
 // MaxMessageCount simply specified as number of messages for now, in the future
 // we may want to allow this to be specified by size in bytes
-const MaxMessageCount uint32 = 100
+const MaxMessageCount uint32 = 750
 
 // AbsoluteMaxBytes The byte count of the serialized messages in a batch cannot
 // exceed this value.
@@ -20,7 +20,7 @@ const PreferredMaxBytes uint32 = 200 * 1024 * 1024
 const MainNodeAddressLocal string = LocalAddress + ":8001"
 
 // MainNodeAddressMsg the mainNode's address for transmit PrevBlock
-const MainNodeAddressMsg string = ":8003"
+const MainNodeAddressMsg string = "127.0.0.1:8003"
 
 // MainNodeAddressBlock the mainNode's address for transmit PrevBlock
 const MainNodeAddressBlock string = LocalAddress + ":8002"
