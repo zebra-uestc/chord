@@ -146,6 +146,8 @@ func (mn *mainNode) SendPrevBlockToChan(block *cb.Block) {
 func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 	for {
 		msg, err := receiver.Recv()
+		//对每一个 Recv 都进行了处理，当发现 io.EOF (流关闭) 后
+		//需要将最终的响应结果发送给客户端，同时关闭正在另外一侧等待的 Recv
 		if err == io.EOF {
 			return receiver.SendAndClose(&bm.DhtStatus{})
 		}
@@ -189,7 +191,7 @@ func (mn *mainNode) TransMsg(receiver bm.MsgTranser_TransMsgServer) error {
 // }
 
 // TransBlock 接收其他节点的block
-func (mn *mainNode) TransBlock(receiver bm.BlockTranser_TransBlockServer) error {
+func (mn *mainNode) TransPrevBlock(receiver bm.BlockTranser_TransPrevBlockServer) error {
 	for {
 		blockByte, err := receiver.Recv()
 		if err == io.EOF {

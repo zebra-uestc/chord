@@ -58,15 +58,15 @@ func (dhtn *DhtNode) DhtInsideTransBlock(block *cb.Block) error {
 	return nil
 }
 
-func (dhtn *DhtNode) TransBlockClient() error {
+func (dhtn *DhtNode) TransPrevBlockClient() error {
 	c, err := dhtn.Transport.getConn(config.MainNodeAddressBlock)
 	if err != nil {
 		log.Fatalln("Can't get conn with main_node: ", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), dhtn.Transport.config.Timeout)
 	defer cancel()
-
-	sender, err := c.TransBlock(ctx)
+	
+	sender, err := c.TransPrevBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (dhtn *DhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 		case msg, ok := <-sendMsgChan:
 			count = count + 1
 			if count == cap(dhtn.sendBlockChan) {
-				go dhtn.TransBlockClient()
+				go dhtn.TransPrevBlockClient()
 			}
 			if !ok {
 				println("channel sendMsgChan is closed!")
