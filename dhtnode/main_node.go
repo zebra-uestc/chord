@@ -198,7 +198,7 @@ func (mn *mainNode) TransPrevBlock(receiver bm.BlockTranser_TransPrevBlockServer
 			return receiver.SendAndClose(&bridge.DhtStatus{})
 		}
 		if err != nil {
-			log.Fatalln("Receive Msg from orderer err:", err)
+			log.Fatalln("Receive Block from other node err:", err)
 			return err
 		}
 		//反序列化为Block
@@ -207,10 +207,7 @@ func (mn *mainNode) TransPrevBlock(receiver bm.BlockTranser_TransPrevBlockServer
 			return err
 		}
 		mn.prevBlockChan <- block
-
 	}
-
-	return nil
 }
 
 func (mn *mainNode) TransBlockClient() error {
@@ -219,7 +216,7 @@ func (mn *mainNode) TransBlockClient() error {
 	if err != nil {
 		log.Fatalln("Can't connect:", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), mn.Transport.config.Timeout)
+	ctx, cancel := context.WithCancel(context.Background())//mn.Transport.config.Timeout)
 	defer cancel()
 	sender, err := c.TransBlock(ctx)
 	if err != nil {
