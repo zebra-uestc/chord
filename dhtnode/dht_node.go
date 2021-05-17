@@ -65,7 +65,7 @@ func (dhtn *DhtNode) TransPrevBlockClient() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	sender, err := c.TransPrevBlock(ctx)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (dhtn *DhtNode) PrevBlock(sendMsgChan chan *chord.Message) {
 				println("channel sendMsgChan is closed!")
 			}
 			cnt++
-			println("msg count :",cnt)
+			// println("msg count :",cnt)
 			if msg.ConfigMsg == nil || msg.ConfigMsg.Payload == nil {
 				batches, pending := dhtn.Ordered(msg.NormalMsg)
 				//出块并发送给mainnode或者orderer

@@ -99,18 +99,18 @@ func (mn *mainNode) StartDht(id, address string) {
 }
 
 func (mn *mainNode) startTransMsgServer(address string) {
-	println("MsgTranserServer listen:", address)
+	// println("MsgTranserServer listen:", address)
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("failed to listen: ", err)
 	}
 	s := grpc.NewServer()
 	bm.RegisterMsgTranserServer(s, mn)
-	println("MsgTranserServer start serve")
+	// println("MsgTranserServer start serve")
 	if err := s.Serve(lis); err != nil {
 		log.Fatal("fail to  serve:", err)
 	}
-	println("MsgTranserServer serve end")
+	// println("MsgTranserServer serve end")
 }
 
 func (mn *mainNode) StartTransMsgServer(address string) {
@@ -119,19 +119,19 @@ func (mn *mainNode) StartTransMsgServer(address string) {
 
 func (mn *mainNode) startTransBlockServer(address string) {
 
-	println("TransBlockServer listen:", address)
+	// println("TransBlockServer listen:", address)
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("failed to listen: ", err)
 	}
 	s := grpc.NewServer()
 	bm.RegisterBlockTranserServer(s, mn)
-	println("TransBlockServer start serve")
+	// println("TransBlockServer start serve")
 	if err := s.Serve(lis); err != nil {
 		log.Fatal("fail to  serve:", err)
 	}
 
-	println("TransBlockServer serve end")
+	// println("TransBlockServer serve end")
 }
 
 func (mn *mainNode) StartTransBlockServer(address string) {
@@ -216,7 +216,7 @@ func (mn *mainNode) TransBlockClient() error {
 	if err != nil {
 		log.Fatalln("Can't connect:", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())//mn.Transport.config.Timeout)
+	ctx, cancel := context.WithCancel(context.Background()) //mn.Transport.config.Timeout)
 	defer cancel()
 	sender, err := c.TransBlock(ctx)
 	if err != nil {
