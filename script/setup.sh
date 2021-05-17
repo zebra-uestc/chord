@@ -4,7 +4,7 @@
 #   up：启动order、deliver、main_node
 #   msg: 启动boardcaster发送消息，后跟参数消息数量（可选，默认数量为1）、并发数（可选，默认并发数为1）、与消息大小（可选，单位为KB，默认大小1KB）
 #   down: 清理所有有关进程
-ORDERER_ADDRESS="127.0.0.1:7050"
+ORDERER_ADDRESS="10.206.0.10:7050"
 
 CURRENT_DIR="$(pwd)"
 SCRIPT_DIR="$CURRENT_DIR/$(dirname $0)"
