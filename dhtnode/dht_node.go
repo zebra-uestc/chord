@@ -81,8 +81,8 @@ func (dhtn *DhtNode) TransPrevBlockClient() error {
 		if err != nil {
 			log.Fatalln("Can't trans block to orderer:", err)
 		}
-		//记录每个区块的发送时间
-		println("send block time:", time.Now().UnixNano()/1e6)
+		// //记录每个区块的发送时间
+		// println("send block time:", time.Now().UnixNano()/1e6)
 
 	}
 	_, err = sender.CloseAndRecv()
